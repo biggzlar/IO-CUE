@@ -15,6 +15,18 @@ def load_depth():
 
 def split_data(data, train_split):
     X, y = data
+    
+    # Load data into memory (NOTE: this takes a lot of memory)
+    X = X[:]
+    y = y[:]
+
+    # Shuffle data before slicing
+    random.seed(42)
+    random.shuffle(X)
+    random.seed(42)
+    random.shuffle(y)
+
+    # Slice
     X_ = X[:train_split]
     y_ = y[:train_split]
     return (X_, y_)
