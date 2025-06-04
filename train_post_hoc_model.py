@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from dataloaders.hypersim_depth import HyperSimDepthDataset
 from evaluation.eval_depth_utils import get_predictions, visualize_results
 from models import BaseEnsemble, PostHocEnsemble
 import os
@@ -37,15 +36,12 @@ if __name__ == "__main__":
     # Get dataloaders directly from config
     train_loader = config['train_loader']
     test_loader = config['test_loader']
-
-    # dataset = HyperSimDepthDataset(data_root="/mnt/data/hypersim", img_size=(128, 160), train_split=0.4)
-    # train_loader, test_loader = dataset.get_dataloaders(batch_size=32)
     
     # Extract training parameters from config
     n_ensemble_models = config['n_ensemble_models']
     n_variance_models = config['n_variance_models']
     # n_epochs = config['n_epochs']
-    n_epochs = int(30000 / len(train_loader))
+    n_epochs = int(60000 / len(train_loader))
     eval_freq = config['eval_freq']
     pair_models = config['pair_models']
     
