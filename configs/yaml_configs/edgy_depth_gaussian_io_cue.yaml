@@ -2,7 +2,7 @@
 
 # Training setup
 n_ensemble_models: 5
-n_variance_models: 5
+n_variance_models: 1
 n_epochs: 64
 eval_freq: 5
 batch_size: 32
