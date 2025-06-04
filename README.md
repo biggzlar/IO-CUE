@@ -1,5 +1,7 @@
 # 👑 Input-Output-Conditioned Uncertainty Estimation (IO-CUE) 👑
 
+**Paper:** https://arxiv.org/abs/2506.00918
+
 A minimal implementation of the proposed IO-CUE framework, including all experiments shown in the submission.
 
 ## Getting the data
