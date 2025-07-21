@@ -45,7 +45,7 @@ mean_criterion: edge_aware_mse_loss
 
 # Variance model parameters
 variance_model_params:
-  in_channels: 3
+  in_channels: 4
   out_channels: [1]
   drop_prob: 0.3
 
