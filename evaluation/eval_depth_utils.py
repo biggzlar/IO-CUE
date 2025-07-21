@@ -99,10 +99,24 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
     depths = results['targets']
     mu_batch = results['mu_batch']
     sigma_batch = results['sigma_batch']
-    
-    # Create results folder
-    path = "results" if path is None else path
-    os.makedirs(path, exist_ok=True)
+    empirical_confidence_levels = results['metrics']['empirical_confidence_levels']
+
+    # # Create results folder
+    # path = "results" if path is None else path
+    # os.makedirs(path, exist_ok=True)
+
+    # Create calibration plot
+    fig, ax = plt.subplots(figsize=(5, 5))
+    confidence_levels = np.arange(0., 1.1, 0.1)
+    empirical_confidence_levels = np.concatenate([np.zeros(1), empirical_confidence_levels])
+    ax.plot(confidence_levels, confidence_levels, linestyle='--', color='black', zorder=-1)
+    ax.plot(confidence_levels, empirical_confidence_levels, marker='o', zorder=1)
+    ax.set_xlabel('Expected Confidence Level')
+    ax.set_ylabel('Empirical Confidence Level')
+    plt.locator_params(axis='both', nbins=3)
+    plt.savefig(os.path.join(path, f"calibration_plot{suffix}.png"), dpi=300)
+    plt.close()
+    print(f"Saved calibration plot to {os.path.join(path, f'calibration_plot{suffix}.png')}")
 
     # Plot input RGB and predicted depth side by side for each sample
     fig, axs = plt.subplots(num_samples, 5, figsize=(20, num_samples * 4))

@@ -1,9 +1,8 @@
 import torch
-import torch.nn.functional as F
 import numpy as np
 from scipy.stats import spearmanr
 
-from predictors.gaussian import gaussian_nll, gaussian_nll_detached
+from predictors.gaussian import gaussian_nll_detached
 
 
 def get_predicted_cdf(residuals: torch.Tensor, sigma: torch.Tensor, num_bins: int = 10):
@@ -61,7 +60,7 @@ def compute_ece(residuals: torch.Tensor, sigma: torch.Tensor, num_bins: int = 10
     # Equal weighting for bins (could be modified to use actual bin counts)
     ece = np.mean(abs_differences)
     
-    return ece
+    return ece, empirical_fractions
 
 
 def compute_nll(predictions, uncertainties, targets):

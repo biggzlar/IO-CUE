@@ -293,7 +293,7 @@ def plot_uncertainty_comparison(test_loader, base_model, bayescap_model, edgy_mo
     # metrics = {}
     # for method_name, uncertainty in uncertainty_methods:
     #     residuals = torch.abs(concat_mu - concat_y)
-    #     ece = compute_ece(residuals, uncertainty)
+    #     ece, _ = compute_ece(residuals, uncertainty)
     #     nll = compute_nll(concat_mu, uncertainty, concat_y)
     #     euc, _ = compute_euc(concat_mu, uncertainty, concat_y)
     #     metrics[method_name] = {

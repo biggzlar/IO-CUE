@@ -347,26 +347,26 @@ def main():
     # Compute metrics for MSE base model
     mse_residuals = torch.abs(mse_mean_tensor - y_test_tensor_sorted)
     mse_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))
-    mse_ece = compute_ece(mse_residuals, mse_ep_sigma_tensor)
+    mse_ece, empirical_confidence_levels = compute_ece(mse_residuals, mse_ep_sigma_tensor)
     mse_nll = compute_nll(mse_mean_tensor, mse_ep_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     mse_euc, _ = compute_euc(mse_mean_tensor, mse_ep_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for Gaussian base model
     gaussian_residuals = torch.abs(gaussian_mean_tensor - y_test_tensor_sorted)
     gaussian_rmse = np.sqrt(np.mean((gaussian_mean - y_test_sorted) ** 2))
-    gaussian_ece = compute_ece(gaussian_residuals, gaussian_al_sigma_tensor)
+    gaussian_ece, empirical_confidence_levels = compute_ece(gaussian_residuals, gaussian_al_sigma_tensor)
     gaussian_nll = compute_nll(gaussian_mean_tensor, gaussian_al_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_euc, _ = compute_euc(gaussian_mean_tensor, gaussian_al_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for BayesCap post-hoc model
     bayescap_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
-    bayescap_ece = compute_ece(mse_residuals, bayescap_sigma_tensor)
+    bayescap_ece, empirical_confidence_levels = compute_ece(mse_residuals, bayescap_sigma_tensor)
     bayescap_nll = compute_nll(mse_mean_tensor, bayescap_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     bayescap_euc, _ = compute_euc(mse_mean_tensor, bayescap_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for Gaussian post-hoc model
     gaussian_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
-    gaussian_posthoc_ece = compute_ece(mse_residuals, gaussian_posthoc_sigma_tensor)
+    gaussian_posthoc_ece, empirical_confidence_levels = compute_ece(mse_residuals, gaussian_posthoc_sigma_tensor)
     gaussian_posthoc_nll = compute_nll(mse_mean_tensor, gaussian_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_posthoc_euc, _ = compute_euc(mse_mean_tensor, gaussian_posthoc_sigma_tensor, y_test_tensor_sorted)
     

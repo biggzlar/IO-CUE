@@ -189,7 +189,7 @@ class PostHocEnsemble(nn.Module):
             if test_loader is not None and (epoch + 1) % eval_freq == 0:
                 results = self.evaluate(test_loader, mean_ensemble)
                 
-                print(f"\nEpoch {epoch+1}/{n_epochs} - Test RMSE: {results['metrics']['rmse']:.4f}, Test NLL: {results['metrics']['nll']:.4f}")
+                print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}")
                 self.update_log(results)
                 self.pickle_log(f"{results_dir}/post_hoc_ensemble_model_log.pkl")
                 if results['metrics']['nll'] < self.min_nll:
@@ -207,6 +207,8 @@ class PostHocEnsemble(nn.Module):
                 if self.overfit_counter > 8:
                     self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
                     break
+
+                print()
                     
         pbar.close()
         
@@ -275,14 +277,15 @@ class PostHocEnsemble(nn.Module):
         # Calculate NLL using predicted variances
         nll = gaussian_nll(torch.cat([all_base_means, all_post_hoc_log_sigmas], dim=1), all_targets, reduce=False)
         residuals = torch.abs(all_base_means - all_targets)
-        ece = compute_ece(residuals=residuals, sigma=torch.exp(all_post_hoc_log_sigmas))
+        ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=torch.exp(all_post_hoc_log_sigmas))
         euc, p_value = compute_euc(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
 
-        print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
+        # print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
         metrics = {
             'nll': nll.mean().detach().cpu(),
             'rmse': rmse.mean().detach().cpu(),
             'avg_var': torch.exp(post_hoc_log_sigma).mean().detach().cpu(),
+            'empirical_confidence_levels': empirical_confidence_levels,
             'ece': ece,
             'euc': euc,
             'p_value': p_value
