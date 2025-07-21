@@ -105,6 +105,10 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
     # path = "results" if path is None else path
     # os.makedirs(path, exist_ok=True)
 
+    # Create calibration plots folder
+    calibration_path = os.path.join(path, "calibration_plots")
+    os.makedirs(calibration_path, exist_ok=True)
+
     # Create calibration plot
     fig, ax = plt.subplots(figsize=(5, 5))
     confidence_levels = np.arange(0., 1.1, 0.1)
@@ -114,9 +118,13 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
     ax.set_xlabel('Expected Confidence Level')
     ax.set_ylabel('Empirical Confidence Level')
     plt.locator_params(axis='both', nbins=3)
-    plt.savefig(os.path.join(path, f"calibration_plot{suffix}.png"), dpi=300)
+    plt.savefig(os.path.join(calibration_path, f"calibration_plot{suffix}.png"), dpi=300)
     plt.close()
-    print(f"Saved calibration plot to {os.path.join(path, f'calibration_plot{suffix}.png')}")
+    print(f"Saved calibration plot to {os.path.join(calibration_path, f'calibration_plot{suffix}.png')}")
+
+    # Create examples plots folder
+    examples_path = os.path.join(path, "examples_plots")
+    os.makedirs(examples_path, exist_ok=True)
 
     # Plot input RGB and predicted depth side by side for each sample
     fig, axs = plt.subplots(num_samples, 5, figsize=(20, num_samples * 4))
@@ -162,7 +170,7 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
         ax_var.axis("off")
 
     plt.tight_layout()
-    out_path = os.path.join(path, f"eval_{metric_name}{suffix}.png")
+    out_path = os.path.join(examples_path, f"eval_{metric_name}{suffix}.png")
     plt.savefig(out_path, dpi=300)
     print(f"Saved visualization to {out_path}")
     plt.close()
