@@ -43,7 +43,7 @@ def create_scheduler(scheduler_type, optimizer, scheduler_params):
     else:
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
 
-def create_model_instances(model_class, model_params, n_instances):
+def create_model_instances(model_class, model_params, n_instances, return_activations=False):
     """
     Create multiple instances of a model class with different random initializations
     
@@ -58,7 +58,7 @@ def create_model_instances(model_class, model_params, n_instances):
     models = []
     for _ in range(n_instances):
         # Create a new instance with its own initialization
-        model = model_class(**model_params)
+        model = model_class(**model_params, return_activations=return_activations)
         models.append(model)
     
     return models 

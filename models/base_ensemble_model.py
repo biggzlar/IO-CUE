@@ -23,7 +23,7 @@ class BaseEnsemble(nn.Module):
         super(BaseEnsemble, self).__init__()
         self.n_models = n_models
         self.model_params = model_params
-        self.models = create_model_instances(model_class, self.model_params, n_models)
+        self.models = create_model_instances(model_class, self.model_params, n_models, return_activations=True)
         self.device = device
         
         # Move models to device
@@ -119,7 +119,7 @@ class BaseEnsemble(nn.Module):
                     optimizers[i].zero_grad()
 
                     # Forward pass
-                    y_pred = self.models[i](batch_X)
+                    y_pred, _, _ = self.models[i](batch_X)
                     loss = criterion(y_pred, batch_y)
                     
                     # Backward pass
@@ -262,9 +262,14 @@ class BaseEnsemble(nn.Module):
         
         # Get predictions from each model
         with torch.no_grad():
-            preds = [self.infer(model(X)) for model in self.models]
-            mean_preds = [pred['mean'] for pred in preds]
-            sigma_preds = [pred['sigma'] for pred in preds]
+            mean_preds, sigma_preds, encoder_activations, decoder_activations = [], [], [], []
+            for model in self.models:
+                pred, enc, dec = model(X)
+                pred = self.infer(pred)
+                mean_preds.append(pred['mean'])
+                sigma_preds.append(pred['sigma'])
+                encoder_activations.append(enc)
+                decoder_activations.append(dec)
         
         # Stack predictions
         all_predictions = torch.stack(mean_preds, axis=0)
@@ -281,7 +286,9 @@ class BaseEnsemble(nn.Module):
         return {'mean': mean_prediction, 
                 'ep_sigma': ep_sigma,
                 'al_sigma': al_sigma,
-                'all_means': all_predictions}
+                'all_means': all_predictions,
+                'encoder_activations': encoder_activations,
+                'decoder_activations': decoder_activations}
             
     def save(self, path):
         """

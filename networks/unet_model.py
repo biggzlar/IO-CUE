@@ -4,11 +4,11 @@ from networks.unet_components import DepthwiseSeparableConv2d, StridedConvBlock,
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels, drop_prob=0.1, activation=torch.nn.ReLU):
+    def __init__(self, in_channels, out_channels, drop_prob=0.1, activation=torch.nn.ReLU, return_activations=False):
         super(UNet, self).__init__()
         self.opts = locals().copy()
         del self.opts['self']
-        
+        self.return_activations = return_activations
         # Encoder
         self.conv1_1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
         self.conv1_2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
@@ -109,9 +109,14 @@ class UNet(nn.Module):
         # up_conv8 = F.interpolate(up_conv8, size=conv1.shape[2:], mode='bilinear', align_corners=False)
         concat9 = torch.cat([up_conv8, conv1], dim=1)
         
-        outputs = torch.concat([head(concat9) for head in self.heads], dim=1)        
+        outputs = torch.concat([head(concat9) for head in self.heads], dim=1)    
         
-        return outputs
+        if self.return_activations:
+            encoder_activations = [conv1, conv2, conv3, conv4, conv5]
+            decoder_activations = [conv6, conv7, conv8, concat9]
+            return outputs, encoder_activations, decoder_activations
+        else:
+            return outputs
 
 
 class MergerUNet(nn.Module):

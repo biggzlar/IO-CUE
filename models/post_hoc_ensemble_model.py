@@ -136,13 +136,14 @@ class PostHocEnsemble(nn.Module):
                     # Generate mean predictions from the mean ensemble
                     with torch.no_grad():
                         if pair_models:
-                            batch_y_pred = paired_mean_models[i](batch_X)
+                            batch_y_pred, _, _ = paired_mean_models[i](batch_X)
                             if batch_y_pred.shape[1] > 1:
                                 # If the mean ensemble has multiple output heads,
                                 # treat the first one as the mean prediction.
                                 batch_y_pred = batch_y_pred[:, :1, ...]
                         else:
-                            batch_y_pred = mean_ensemble.predict(batch_X)['mean']
+                            batch_pred = mean_ensemble.predict(batch_X)
+                            batch_y_pred = batch_pred['mean']
                     
                     optimizers[i].zero_grad()
 
