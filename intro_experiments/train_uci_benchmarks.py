@@ -347,26 +347,26 @@ def main():
     # Compute metrics for MSE base model
     mse_residuals = torch.abs(mse_mean_tensor - y_test_tensor_sorted)
     mse_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))
-    mse_ece, empirical_confidence_levels = compute_ece(mse_residuals, mse_ep_sigma_tensor)
+    mse_ece, mse_empirical_confidence_levels = compute_ece(mse_residuals, mse_ep_sigma_tensor)
     mse_nll = compute_nll(mse_mean_tensor, mse_ep_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     mse_euc, _ = compute_euc(mse_mean_tensor, mse_ep_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for Gaussian base model
     gaussian_residuals = torch.abs(gaussian_mean_tensor - y_test_tensor_sorted)
     gaussian_rmse = np.sqrt(np.mean((gaussian_mean - y_test_sorted) ** 2))
-    gaussian_ece, empirical_confidence_levels = compute_ece(gaussian_residuals, gaussian_al_sigma_tensor)
+    gaussian_ece, gaussian_empirical_confidence_levels = compute_ece(gaussian_residuals, gaussian_al_sigma_tensor)
     gaussian_nll = compute_nll(gaussian_mean_tensor, gaussian_al_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_euc, _ = compute_euc(gaussian_mean_tensor, gaussian_al_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for BayesCap post-hoc model
     bayescap_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
-    bayescap_ece, empirical_confidence_levels = compute_ece(mse_residuals, bayescap_sigma_tensor)
+    bayescap_ece, bayescap_empirical_confidence_levels = compute_ece(mse_residuals, bayescap_sigma_tensor)
     bayescap_nll = compute_nll(mse_mean_tensor, bayescap_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     bayescap_euc, _ = compute_euc(mse_mean_tensor, bayescap_sigma_tensor, y_test_tensor_sorted)
     
     # Compute metrics for Gaussian post-hoc model
     gaussian_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
-    gaussian_posthoc_ece, empirical_confidence_levels = compute_ece(mse_residuals, gaussian_posthoc_sigma_tensor)
+    gaussian_posthoc_ece, gaussian_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, gaussian_posthoc_sigma_tensor)
     gaussian_posthoc_nll = compute_nll(mse_mean_tensor, gaussian_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_posthoc_euc, _ = compute_euc(mse_mean_tensor, gaussian_posthoc_sigma_tensor, y_test_tensor_sorted)
     
@@ -376,28 +376,24 @@ def main():
             'ece': mse_ece.item(),
             'nll': mse_nll,
             'euc': mse_euc,
-            'min_nll': mse_base_ensemble.min_nll,
         },
         'gaussian_base': {
             'rmse': gaussian_rmse,
             'ece': gaussian_ece.item(),
             'nll': gaussian_nll,
             'euc': gaussian_euc,
-            'min_nll': gaussian_base_ensemble.min_nll,
         },
         'bayescap_posthoc': {
             'rmse': bayescap_rmse,
             'ece': bayescap_ece.item(),
             'nll': bayescap_nll,
             'euc': bayescap_euc,
-            'min_nll': bayescap_posthoc_ensemble.min_nll,
         },
         'gaussian_posthoc': {
             'rmse': gaussian_posthoc_rmse,
             'ece': gaussian_posthoc_ece.item(),
             'nll': gaussian_posthoc_nll,
             'euc': gaussian_posthoc_euc,
-            'min_nll': gaussian_posthoc_ensemble.min_nll,
         }
     }
     
@@ -430,6 +426,23 @@ def main():
         f.write(f"  EUC: {results['gaussian_posthoc']['euc']:.4f}\n")
     
     print(f"\nResults saved to {results_dir}")
+
+    # Create calibration plot
+    fig, ax = plt.subplots(figsize=(5, 5))
+    confidence_levels = np.arange(0., 1.1, 0.1)
+    labels = ["mse", "gaussian", "bayescap", "io-cue"]
+    ax.plot(confidence_levels, confidence_levels, linestyle='--', color='black', zorder=-1)
+    for i, empirical_confidence_levels in enumerate([mse_empirical_confidence_levels, gaussian_empirical_confidence_levels, bayescap_empirical_confidence_levels, gaussian_posthoc_empirical_confidence_levels]):
+
+        empirical_confidence_levels = np.concatenate([np.zeros(1), empirical_confidence_levels])
+        ax.plot(confidence_levels, empirical_confidence_levels, marker='o', zorder=1, label=labels[i])
+    
+    ax.set_xlabel('Expected Confidence Level')
+    ax.set_ylabel('Empirical Confidence Level')
+    plt.locator_params(axis='both', nbins=3)
+    plt.legend()
+    plt.savefig(os.path.join(results_dir, f"calibration_plot_{args.dataset}.png"), dpi=300)
+    plt.close()
 
 if __name__ == "__main__":
     main() 
