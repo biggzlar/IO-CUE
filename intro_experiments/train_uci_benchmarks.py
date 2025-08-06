@@ -123,7 +123,7 @@ def main():
     
     # 4. Gaussian post-hoc model
     gaussian_posthoc_model_params = {
-        'in_channels': input_dim,  # Input dimension + 1 for the mean prediction
+        'in_channels': input_dim + 1,  # Input dimension + 1 for the mean prediction
         'hidden_dim': args.hidden_dim // 2,
         'output_dim': 1,  # log_sigma for post-hoc Gaussian
         'activation': nn.Tanh,
