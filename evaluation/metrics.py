@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from scipy.stats import spearmanr
+from torch.distributions.normal import Normal
 
 from predictors.gaussian import gaussian_nll_detached
 
@@ -122,3 +123,21 @@ def compute_euc(predictions, uncertainties, targets):
     except:
         # Fallback in case of errors
         return 0.0, 1.0
+    
+
+def compute_crps(predictions, uncertainties, targets):
+    # Ensure positive sigma
+    uncertainties = torch.clamp(uncertainties, min=1e-6)
+    
+    # Standardized error
+    x = (targets - predictions) / uncertainties
+    
+    # Standard normal
+    normal = Normal(torch.zeros_like(x), torch.ones_like(x))
+    
+    # Compute components
+    pdf = torch.exp(normal.log_prob(x))
+    cdf = normal.cdf(x)
+    
+    crps = uncertainties * (x * (2 * cdf - 1) + 2 * pdf - 1. / torch.sqrt(torch.tensor(torch.pi)))
+    return crps

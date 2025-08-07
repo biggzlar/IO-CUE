@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from dataloaders.dataset_utils import create_bootstrapped_dataloaders
-from evaluation.metrics import compute_ece, compute_euc
+from evaluation.metrics import compute_ece, compute_euc, compute_crps
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
 from evaluation.eval_depth_utils import get_predictions, visualize_results
 
@@ -190,7 +190,7 @@ class PostHocEnsemble(nn.Module):
             if test_loader is not None and (epoch + 1) % eval_freq == 0:
                 results = self.evaluate(test_loader, mean_ensemble)
                 
-                print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}")
+                print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
                 self.update_log(results)
                 self.pickle_log(f"{results_dir}/post_hoc_ensemble_model_log.pkl")
                 if results['metrics']['nll'] < self.min_nll:
@@ -280,6 +280,7 @@ class PostHocEnsemble(nn.Module):
         residuals = torch.abs(all_base_means - all_targets)
         ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=torch.exp(all_post_hoc_log_sigmas))
         euc, p_value = compute_euc(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
+        crps = compute_crps(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
 
         # print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
         metrics = {
@@ -289,7 +290,8 @@ class PostHocEnsemble(nn.Module):
             'empirical_confidence_levels': empirical_confidence_levels,
             'ece': ece,
             'euc': euc,
-            'p_value': p_value
+            'p_value': p_value,
+            'crps': crps.mean().detach().cpu()
         }
         
         return {
