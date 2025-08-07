@@ -39,11 +39,8 @@ class PostHocEnsemble(nn.Module):
         self.infer = infer
         self.is_bayescap = self.infer == predict_bayescap
 
-        self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'p_value': []}
+        self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'crps': [], 'p_value': []}
         self.overfit_counter = 0
-        self.eraser_transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomErasing(p=0.5, scale=(0.1, 0.5), ratio=(0.3, 3.3), value=0, inplace=False)
-        ])
 
 
     def optimize(self, results_dir, model_dir, train_loader, mean_ensemble, test_loader=None, n_epochs=100,
