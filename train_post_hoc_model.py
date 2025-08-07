@@ -67,6 +67,7 @@ if __name__ == "__main__":
     
     # Create variance ensemble
     sigma_ensemble = PostHocEnsemble(
+        mean_ensemble=mean_ensemble,
         model_class=variance_model_class,
         model_params=variance_model_params,
         n_models=n_variance_models, 
@@ -107,7 +108,6 @@ if __name__ == "__main__":
             model_dir=model_dir,
             train_loader=train_loader,
             test_loader=test_loader,
-            mean_ensemble=mean_ensemble,
             n_epochs=n_epochs,
             optimizer_type=config['variance_optimizer_type'],
             optimizer_params=config['variance_optimizer_params'],
@@ -123,7 +123,7 @@ if __name__ == "__main__":
         results = mean_ensemble.evaluate(test_loader)
         print(f"Mean Ensemble - Test RMSE: {results['rmse']:.4f}, Test NLL: {results['nll']:.4f}")
         
-        results = sigma_ensemble.evaluate(test_loader, mean_ensemble)
+        results = sigma_ensemble.evaluate(test_loader)
         print(f"Variance Ensemble - Test RMSE: {results['metrics']['rmse']:.4f}, Test NLL: {results['metrics']['nll']:.4f}")
         
         # Save model states

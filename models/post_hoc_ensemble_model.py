@@ -9,13 +9,11 @@ from evaluation.metrics import compute_ece, compute_euc, compute_crps
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
 from evaluation.eval_depth_utils import get_predictions, visualize_results
 
-import torchvision.transforms
-
 from predictors.gaussian import gaussian_nll
 from predictors.bayescap import predict_bayescap
 
 class PostHocEnsemble(nn.Module):
-    def __init__(self, model_class, model_params, infer, n_models=5, device=None):
+    def __init__(self, mean_ensemble, model_class, model_params, infer, n_models=5, device=None):
         """
         Ensemble of variance prediction models for post-hoc uncertainty estimation
         
@@ -30,6 +28,7 @@ class PostHocEnsemble(nn.Module):
         self.model_params = model_params
         self.n_models = n_models
         self.models = create_model_instances(self.model_class, self.model_params, self.n_models)
+        self.mean_ensemble = mean_ensemble
         self.device = device
         
         # Move models to device
@@ -43,7 +42,7 @@ class PostHocEnsemble(nn.Module):
         self.overfit_counter = 0
 
 
-    def optimize(self, results_dir, model_dir, train_loader, mean_ensemble, test_loader=None, n_epochs=100,
+    def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100,
               optimizer_type='Adam', optimizer_params=None, scheduler_type=None, 
               scheduler_params=None, pair_models=False, criterion=None, eval_freq=100, is_bayescap=False):
         """
@@ -62,9 +61,6 @@ class PostHocEnsemble(nn.Module):
             criterion: Loss function to use
             eval_freq: Frequency (in epochs) to evaluate on test set
         """
-        if mean_ensemble is None:
-            raise ValueError("Mean ensemble must be provided for PostHocEnsemble training")
-        
         # Create optimizers, schedulers and dataloaders for each model
         optimizers = []
         schedulers = []
@@ -94,7 +90,7 @@ class PostHocEnsemble(nn.Module):
                 schedulers.append(None)
             
             # Pair with mean model
-            mean_model = mean_ensemble.models[i % len(mean_ensemble.models)]
+            mean_model = self.mean_ensemble.models[i % len(self.mean_ensemble.models)]
             mean_model.eval()
             paired_mean_models.append(mean_model)
         
@@ -139,7 +135,7 @@ class PostHocEnsemble(nn.Module):
                                 # treat the first one as the mean prediction.
                                 batch_y_pred = batch_y_pred[:, :1, ...]
                         else:
-                            batch_pred = mean_ensemble.predict(batch_X)
+                            batch_pred = self.mean_ensemble.predict(batch_X)
                             batch_y_pred = batch_pred['mean']
                     
                     optimizers[i].zero_grad()
@@ -185,7 +181,7 @@ class PostHocEnsemble(nn.Module):
             
             # Evaluate on test set if requested
             if test_loader is not None and (epoch + 1) % eval_freq == 0:
-                results = self.evaluate(test_loader, mean_ensemble)
+                results = self.evaluate(test_loader)
                 
                 print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
                 self.update_log(results)
@@ -211,7 +207,7 @@ class PostHocEnsemble(nn.Module):
         pbar.close()
         
 
-    def evaluate(self, test_loader, mean_ensemble):
+    def evaluate(self, test_loader):
         """
         Evaluate the ensemble on a test set
         
@@ -229,7 +225,7 @@ class PostHocEnsemble(nn.Module):
         all_errors = []
         
         # Set base models to evaluation mode
-        for model in mean_ensemble.models:
+        for model in self.mean_ensemble.models:
             model.eval()
         
         # Get mean predictions from mean ensemble
@@ -240,7 +236,7 @@ class PostHocEnsemble(nn.Module):
                 batch_y = batch_y.to(self.device)
                 
                 # Mean predictions from mean ensemble
-                batch_preds = mean_ensemble.predict(batch_X)
+                batch_preds = self.mean_ensemble.predict(batch_X)
                 base_mean = batch_preds['mean']
 
                 all_base_means.append(base_mean)
@@ -305,7 +301,7 @@ class PostHocEnsemble(nn.Module):
             'metrics': metrics,
         }
     
-    def predict(self, X, y_pred=None, return_individual=False):
+    def predict(self, X, y_pred=None):
         """
         Generate variance predictions from all models in the ensemble
         
