@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser.add_argument('--visualize-only', action='store_true', help='Skip training and only create visualizations')
     args = parser.parse_args()
     
-    mean_ensemble_path = "results/base_unet/checkpoints/base_ensemble_model_best.pt"
+    mean_ensemble_path = "results/pretrained/base_ensemble_model_best.pth"
 
     # Process config from args
     config, config_name = process_config_from_args(args)
@@ -155,5 +155,6 @@ if __name__ == "__main__":
         batch_x, batch_y = next(iter(test_loader))
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        results = sigma_ensemble.evaluate(test_loader, mean_ensemble)
+        results = sigma_ensemble.evaluate(test_loader)
+        print(f"Evaluation - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
         visualize_results(results, num_samples=5, metric_name="nll", path=f"{results_dir}", suffix="_test")
