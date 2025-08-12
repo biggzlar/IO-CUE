@@ -10,6 +10,7 @@ from pathlib import Path
 # Add parent directory to path to access modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from models.post_hoc_laplace_model import PostHocLaplace
 from networks.simple_regression_model import SimpleRegressionModel
 from dataloaders.uci_datasets import UCIDatasets
 from models.base_ensemble_model import BaseEnsemble
@@ -20,7 +21,7 @@ from predictors.gaussian import gaussian_nll_detached, predict_gaussian, post_ho
 from predictors.mse import mse, predict_mse
 from predictors.bayescap import bayescap_loss, predict_bayescap
 from predictors.generalized_gaussian import gen_gaussian_nll, predict_gen_gaussian, post_hoc_predict_gen_gaussian
-from evaluation.metrics import compute_ece, compute_nll, compute_euc
+from evaluation.metrics import compute_ece, compute_nll, compute_euc, compute_crps
 
 plt.rcParams.update(
     {
@@ -112,6 +113,7 @@ def main():
     }
     
     bayescap_posthoc_ensemble = PostHocEnsemble(
+        mean_ensemble=mse_base_ensemble,
         model_class=SimpleRegressionModel,
         model_params=bayescap_posthoc_model_params,
         infer=predict_bayescap,
@@ -130,6 +132,7 @@ def main():
     }
     
     gaussian_posthoc_ensemble = PostHocEnsemble(
+        mean_ensemble=mse_base_ensemble,
         model_class=SimpleRegressionModel,
         model_params=gaussian_posthoc_model_params,
         infer=post_hoc_predict_gaussian,
@@ -138,6 +141,13 @@ def main():
     )
     # # Set the in_channels parameter used in the predict method
     # gaussian_posthoc_ensemble.model_params['in_channels'] = 3
+
+    # import ipdb; ipdb.set_trace()
+    LA = PostHocLaplace(
+        mean_ensemble=mse_base_ensemble,
+        device=device,
+        filter=['layer_1']
+    )
     
     # Define optimizer parameters
     optimizer_params = {
@@ -183,7 +193,6 @@ def main():
         results_dir=results_dir,
         model_dir=model_dir,
         train_loader=train_loader,
-        mean_ensemble=mse_base_ensemble,  # Use MSE base model for mean predictions
         test_loader=test_loader,
         n_epochs=n_epochs,
         optimizer_type='AdamW',
@@ -192,7 +201,6 @@ def main():
         scheduler_params={'T_max': n_epochs},
         criterion=bayescap_loss,
         eval_freq=args.eval_freq,
-        is_bayescap=True
     )
     
     # Train Gaussian post-hoc ensemble model
@@ -201,7 +209,6 @@ def main():
         results_dir=results_dir,
         model_dir=model_dir,
         train_loader=train_loader,
-        mean_ensemble=mse_base_ensemble,  # Use MSE base model for mean predictions
         test_loader=test_loader,
         n_epochs=n_epochs,
         optimizer_type='AdamW',
@@ -210,6 +217,13 @@ def main():
         scheduler_params={'T_max': n_epochs},
         criterion=gaussian_nll_detached,
         eval_freq=args.eval_freq
+    )
+
+    LA.optimize(
+        results_dir=results_dir, 
+        model_dir=model_dir, 
+        train_loader=train_loader, 
+        test_loader=test_loader
     )
     # gaussian_posthoc_ensemble.load(f"{model_dir}/gaussian_posthoc_ensemble_model_best.pt")
     
@@ -245,6 +259,8 @@ def main():
     
     # For Gaussian post-hoc, pass both X and the mean prediction from MSE base
     gaussian_posthoc_preds = gaussian_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
+
+    laplace_preds = LA.predict(X=X_test_tensor)
     
     # Extract means and uncertainties
     mse_mean = mse_preds['mean'].cpu().numpy()[sort_indices].squeeze()
@@ -256,10 +272,11 @@ def main():
     bayescap_sigma = bayescap_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
     
     gaussian_posthoc_sigma = gaussian_posthoc_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
+
+    laplace_sigma = laplace_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
     
     # Ensure y_test is 1D for plotting
     y_test_sorted = y_test_sorted.squeeze()
-
 
     # Inverse transform y_test
     y_test_sorted = y_test_sorted * dataset.y_train_scale.item() + dataset.y_train_mu.item()
@@ -268,6 +285,8 @@ def main():
 
     bayescap_sigma = bayescap_sigma * dataset.y_train_scale.item()
     gaussian_posthoc_sigma = gaussian_posthoc_sigma * dataset.y_train_scale.item()
+    laplace_sigma = laplace_sigma * dataset.y_train_scale.item()
+
     mse_ep_sigma = mse_ep_sigma * dataset.y_train_scale.item()
     gaussian_al_sigma = gaussian_al_sigma * dataset.y_train_scale.item()
     
@@ -331,6 +350,21 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig(results_dir / f"gaussian_posthoc_plot.png")
+
+    # 5. Gaussian Post-hoc Model
+    plt.figure(figsize=(10, 6))
+    plt.scatter(X_plot_feature, y_test_sorted, s=10, color='gray', alpha=0.5, label='Test Data')
+    plt.plot(X_plot_feature, mse_mean, color='purple', label='MSE Base + Laplace Approximation')
+    plt.fill_between(X_plot_feature, 
+                    mse_mean - 2 * laplace_sigma, 
+                    mse_mean + 2 * laplace_sigma, 
+                    color='purple', alpha=0.2, label='Uncertainty (±2σ)')
+    plt.xlabel(f'Feature {plot_feature_idx}')
+    plt.ylabel('Target')
+    plt.title(f'Laplace Approximation - {args.dataset.capitalize()}')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(results_dir / f"laplace_plot.png")
     
     # Save numerical results
     # Convert numpy arrays to tensors for metrics computation
@@ -343,6 +377,7 @@ def main():
     gaussian_al_sigma_tensor = torch.tensor(gaussian_al_sigma)
     bayescap_sigma_tensor = torch.tensor(bayescap_sigma)
     gaussian_posthoc_sigma_tensor = torch.tensor(gaussian_posthoc_sigma)
+    laplace_sigma_tensor = torch.tensor(laplace_sigma)
     
     # Compute metrics for MSE base model
     mse_residuals = torch.abs(mse_mean_tensor - y_test_tensor_sorted)
@@ -350,6 +385,7 @@ def main():
     mse_ece, mse_empirical_confidence_levels = compute_ece(mse_residuals, mse_ep_sigma_tensor)
     mse_nll = compute_nll(mse_mean_tensor, mse_ep_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     mse_euc, _ = compute_euc(mse_mean_tensor, mse_ep_sigma_tensor, y_test_tensor_sorted)
+    mse_crps = compute_crps(mse_mean_tensor, mse_ep_sigma_tensor, y_test_tensor_sorted).mean().item()
     
     # Compute metrics for Gaussian base model
     gaussian_residuals = torch.abs(gaussian_mean_tensor - y_test_tensor_sorted)
@@ -357,18 +393,28 @@ def main():
     gaussian_ece, gaussian_empirical_confidence_levels = compute_ece(gaussian_residuals, gaussian_al_sigma_tensor)
     gaussian_nll = compute_nll(gaussian_mean_tensor, gaussian_al_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_euc, _ = compute_euc(gaussian_mean_tensor, gaussian_al_sigma_tensor, y_test_tensor_sorted)
+    gaussian_crps = compute_crps(gaussian_mean_tensor, gaussian_al_sigma_tensor, y_test_tensor_sorted).mean().item()
     
     # Compute metrics for BayesCap post-hoc model
     bayescap_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
     bayescap_ece, bayescap_empirical_confidence_levels = compute_ece(mse_residuals, bayescap_sigma_tensor)
     bayescap_nll = compute_nll(mse_mean_tensor, bayescap_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     bayescap_euc, _ = compute_euc(mse_mean_tensor, bayescap_sigma_tensor, y_test_tensor_sorted)
+    bayescap_crps = compute_crps(mse_mean_tensor, bayescap_sigma_tensor, y_test_tensor_sorted).mean().item()
     
     # Compute metrics for Gaussian post-hoc model
     gaussian_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
     gaussian_posthoc_ece, gaussian_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, gaussian_posthoc_sigma_tensor)
     gaussian_posthoc_nll = compute_nll(mse_mean_tensor, gaussian_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     gaussian_posthoc_euc, _ = compute_euc(mse_mean_tensor, gaussian_posthoc_sigma_tensor, y_test_tensor_sorted)
+    gaussian_posthoc_crps = compute_crps(mse_mean_tensor, gaussian_posthoc_sigma_tensor, y_test_tensor_sorted).mean().item()
+
+    # Compute metrics for Laplace approximation
+    laplace_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))  # Same mean as MSE base
+    laplace_ece, gaussian_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, laplace_sigma_tensor)
+    laplace_nll = compute_nll(mse_mean_tensor, laplace_sigma_tensor**2, y_test_tensor_sorted).mean().item()
+    laplace_euc, _ = compute_euc(mse_mean_tensor, laplace_sigma_tensor, y_test_tensor_sorted)
+    laplace_crps = compute_crps(mse_mean_tensor, laplace_sigma_tensor, y_test_tensor_sorted).mean().item()
     
     results = {
         'mse_base': {
@@ -376,24 +422,35 @@ def main():
             'ece': mse_ece.item(),
             'nll': mse_nll,
             'euc': mse_euc,
+            'crps': mse_crps
         },
         'gaussian_base': {
             'rmse': gaussian_rmse,
             'ece': gaussian_ece.item(),
             'nll': gaussian_nll,
             'euc': gaussian_euc,
+            'crps': gaussian_crps
         },
         'bayescap_posthoc': {
             'rmse': bayescap_rmse,
             'ece': bayescap_ece.item(),
             'nll': bayescap_nll,
             'euc': bayescap_euc,
+            'crps': bayescap_crps
         },
         'gaussian_posthoc': {
             'rmse': gaussian_posthoc_rmse,
             'ece': gaussian_posthoc_ece.item(),
             'nll': gaussian_posthoc_nll,
             'euc': gaussian_posthoc_euc,
+            'crps': gaussian_posthoc_crps
+        },
+        'laplace': {
+            'rmse': laplace_rmse,
+            'ece': laplace_ece.item(),
+            'nll': laplace_nll,
+            'euc': laplace_euc,
+            'crps': laplace_crps
         }
     }
     
@@ -402,28 +459,39 @@ def main():
         f.write(f"Results for {args.dataset} dataset:\n\n")
         
         f.write("MSE Base Model:\n")
-        f.write(f"  RMSE: {results['mse_base']['rmse']:.4f}\n")
+        f.write(f" RMSE: {results['mse_base']['rmse']:.4f}\n")
         f.write(f"  ECE: {results['mse_base']['ece']:.4f}\n")
         f.write(f"  NLL: {results['mse_base']['nll']:.4f}\n")
-        f.write(f"  EUC: {results['mse_base']['euc']:.4f}\n\n")
+        f.write(f"  EUC: {results['mse_base']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['mse_base']['crps']:.4f}\n\n")
         
         f.write("Gaussian Base Model:\n")
-        f.write(f"  RMSE: {results['gaussian_base']['rmse']:.4f}\n")
+        f.write(f" RMSE: {results['gaussian_base']['rmse']:.4f}\n")
         f.write(f"  ECE: {results['gaussian_base']['ece']:.4f}\n")
         f.write(f"  NLL: {results['gaussian_base']['nll']:.4f}\n")
-        f.write(f"  EUC: {results['gaussian_base']['euc']:.4f}\n\n")
+        f.write(f"  EUC: {results['gaussian_base']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['gaussian_base']['crps']:.4f}\n\n")
         
         f.write("BayesCap Post-hoc Model:\n")
-        f.write(f"  RMSE: {results['bayescap_posthoc']['rmse']:.4f}\n")
+        f.write(f" RMSE: {results['bayescap_posthoc']['rmse']:.4f}\n")
         f.write(f"  ECE: {results['bayescap_posthoc']['ece']:.4f}\n")
         f.write(f"  NLL: {results['bayescap_posthoc']['nll']:.4f}\n")
-        f.write(f"  EUC: {results['bayescap_posthoc']['euc']:.4f}\n\n")
+        f.write(f"  EUC: {results['bayescap_posthoc']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['bayescap_posthoc']['crps']:.4f}\n\n")
         
         f.write("Gaussian Post-hoc Model:\n")
-        f.write(f"  RMSE: {results['gaussian_posthoc']['rmse']:.4f}\n")
+        f.write(f" RMSE: {results['gaussian_posthoc']['rmse']:.4f}\n")
         f.write(f"  ECE: {results['gaussian_posthoc']['ece']:.4f}\n")
         f.write(f"  NLL: {results['gaussian_posthoc']['nll']:.4f}\n")
         f.write(f"  EUC: {results['gaussian_posthoc']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['gaussian_posthoc']['crps']:.4f}\n\n")
+
+        f.write("Laplace Approximation:\n")
+        f.write(f" RMSE: {results['laplace']['rmse']:.4f}\n")
+        f.write(f"  ECE: {results['laplace']['ece']:.4f}\n")
+        f.write(f"  NLL: {results['laplace']['nll']:.4f}\n")
+        f.write(f"  EUC: {results['laplace']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['laplace']['crps']:.4f}\n")
     
     print(f"\nResults saved to {results_dir}")
 

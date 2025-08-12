@@ -44,7 +44,7 @@ class PostHocEnsemble(nn.Module):
 
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100,
               optimizer_type='Adam', optimizer_params=None, scheduler_type=None, 
-              scheduler_params=None, pair_models=False, criterion=None, eval_freq=100, is_bayescap=False):
+              scheduler_params=None, pair_models=False, criterion=None, eval_freq=100):
         """
         Train the post-hoc ensemble for uncertainty estimation
         
@@ -129,7 +129,7 @@ class PostHocEnsemble(nn.Module):
                     # Generate mean predictions from the mean ensemble
                     with torch.no_grad():
                         if pair_models:
-                            batch_y_pred, _, _ = paired_mean_models[i](batch_X)
+                            batch_y_pred = paired_mean_models[i](batch_X)
                             if batch_y_pred.shape[1] > 1:
                                 # If the mean ensemble has multiple output heads,
                                 # treat the first one as the mean prediction.
