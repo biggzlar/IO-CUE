@@ -41,7 +41,6 @@ class PostHocEnsemble(nn.Module):
         self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'crps': [], 'p_value': []}
         self.overfit_counter = 0
 
-
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100,
               optimizer_type='Adam', optimizer_params=None, scheduler_type=None, 
               scheduler_params=None, pair_models=False, criterion=None, eval_freq=100):
@@ -61,41 +60,17 @@ class PostHocEnsemble(nn.Module):
             criterion: Loss function to use
             eval_freq: Frequency (in epochs) to evaluate on test set
         """
-        # Create optimizers, schedulers and dataloaders for each model
-        optimizers = []
-        schedulers = []
-        dataloaders = []
-        paired_mean_models = []
-        finished = [False] * len(self.models)
-
-        self.min_nll = float('inf')
+        # Initialize training components
+        optimizers, schedulers, paired_mean_models = self.initialize_training_components(
+            optimizer_type, optimizer_params, scheduler_type, scheduler_params
+        )
         
         # Create a bootstrapped dataloader for each model
-        for i in range(len(self.models)):
-            # Create optimizer using utility function
-            optimizer = create_optimizer(
-                optimizer_type, 
-                self.models[i].parameters(), 
-                optimizer_params
-            )
-            optimizers.append(optimizer)
-            
-            # Create scheduler if specified using utility function
-            if scheduler_type is not None:
-                if scheduler_params is None:
-                    raise ValueError("scheduler_params must be provided when scheduler_type is not None")
-                scheduler = create_scheduler(scheduler_type, optimizer, scheduler_params)
-                schedulers.append(scheduler)
-            else:
-                schedulers.append(None)
-            
-            # Pair with mean model
-            mean_model = self.mean_ensemble.models[i % len(self.mean_ensemble.models)]
-            mean_model.eval()
-            paired_mean_models.append(mean_model)
-        
         dataloaders = create_bootstrapped_dataloaders(train_loader, len(self.models))
-
+        
+        finished = [False] * len(self.models)
+        self.min_nll = float('inf')
+        
         # Train all models concurrently
         dataloader_iters = [iter(dataloaders[i]) for i in range(len(self.models))]
         epoch_losses = [0.0 for _ in range(len(self.models))]
@@ -389,3 +364,45 @@ class PostHocEnsemble(nn.Module):
     def pickle_log(self, path):
         with open(path, 'wb') as f:
             pickle.dump(self.train_log, f)
+
+    def initialize_training_components(self, optimizer_type, optimizer_params, scheduler_type, scheduler_params):
+        """
+        Initialize optimizers, schedulers, and paired mean models for training
+        
+        Args:
+            optimizer_type: Type of optimizer to use
+            optimizer_params: Parameters for the optimizer
+            scheduler_type: Type of learning rate scheduler to use
+            scheduler_params: Parameters for the scheduler
+            
+        Returns:
+            tuple: (optimizers, schedulers, paired_mean_models)
+        """
+        optimizers = []
+        schedulers = []
+        paired_mean_models = []
+        
+        for i in range(len(self.models)):
+            # Create optimizer using utility function
+            optimizer = create_optimizer(
+                optimizer_type, 
+                self.models[i].parameters(), 
+                optimizer_params
+            )
+            optimizers.append(optimizer)
+            
+            # Create scheduler if specified using utility function
+            if scheduler_type is not None:
+                if scheduler_params is None:
+                    raise ValueError("scheduler_params must be provided when scheduler_type is not None")
+                scheduler = create_scheduler(scheduler_type, optimizer, scheduler_params)
+                schedulers.append(scheduler)
+            else:
+                schedulers.append(None)
+            
+            # Pair with mean model
+            mean_model = self.mean_ensemble.models[i % len(self.mean_ensemble.models)]
+            mean_model.eval()
+            paired_mean_models.append(mean_model)
+            
+        return optimizers, schedulers, paired_mean_models
