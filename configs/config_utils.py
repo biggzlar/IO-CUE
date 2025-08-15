@@ -19,7 +19,7 @@ from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian, gen_g
 from models import BaseEnsemble
 from models.post_hoc_frameworks import IOCUE, BayesCap
 
-def load_yaml_config(file_path):
+def load_yaml_config(file_path, device):
     """
     Load configuration from a YAML file.
     
@@ -40,7 +40,7 @@ def load_yaml_config(file_path):
         config = yaml.safe_load(f)
     
     # Convert the loaded YAML to a fully-functioning config
-    config = resolve_config_references(config)
+    config = resolve_config_references(config, device)
     return config
     # try:
     #     with open(file_path, 'r') as f:
@@ -53,7 +53,7 @@ def load_yaml_config(file_path):
     #     print(f"Error loading YAML configuration: {str(e)}")
     #     return None
 
-def resolve_config_references(config):
+def resolve_config_references(config, device):
     """
     Resolve string references to Python objects in the configuration.
     
@@ -123,7 +123,7 @@ def resolve_config_references(config):
         model_class=resolved_config['mean_model_class'],
         model_params=resolved_config['mean_model_params'],
         n_models=resolved_config['n_ensemble_models'], 
-        device=resolved_config['device'],
+        device=device,
         infer=resolved_config['mean_predictor']
     )
 
@@ -134,7 +134,7 @@ def resolve_config_references(config):
         model_class=resolved_config['variance_model_class'],
         model_params=resolved_config['variance_model_params'],
         n_models=resolved_config['n_variance_models'], 
-        device=resolved_config['device'],
+        device=device,
     )
     
     return resolved_config
@@ -295,7 +295,7 @@ def setup_result_directories(config_name):
     
     return model_dir, results_dir
 
-def process_config_from_args(args):
+def process_config_from_args(args, device):
     """
     Process configuration from command line arguments.
     
@@ -305,7 +305,7 @@ def process_config_from_args(args):
     Returns:
         tuple: (config, config_name)
     """
-    config = load_yaml_config(args.yaml_config)
+    config = load_yaml_config(args.yaml_config, device)
     config_name = os.path.basename(args.yaml_config).replace('.yaml', '').replace('.yml', '')
 
     return config, config_name 

@@ -1,14 +1,12 @@
-import numpy as np
-import torch
-from evaluation.eval_depth_utils import get_predictions, visualize_results
-from models import BaseEnsemble, PostHocEnsemble
 import os
+import torch
+import numpy as np
+from evaluation.eval_depth_utils import visualize_results
 import argparse
 from configs.config_utils import (
     process_config_from_args,
     setup_result_directories
 )
-from models.post_hoc_frameworks.iocue import IOCUE
 
 # Ensure the results directory exists
 os.makedirs('results', exist_ok=True)
@@ -24,60 +22,35 @@ if __name__ == "__main__":
     # mean_ensemble_path = "results/base_unet/checkpoints/base_ensemble_final.pth"
     mean_ensemble_path = "results/pretrained/base_ensemble_model_best.pth"
 
+    # Get device
+    device = torch.device(f"cuda:{args.device}")
+    print(f"Working on device: {device}")
+
     # Process config from args
-    config, config_name = process_config_from_args(args)
+    config, config_name = process_config_from_args(args, device)
     
     # Set random seeds for reproducibility
     np.random.seed(0)
     torch.manual_seed(0)
-    
-    # Get device
-    device = torch.device(f"cuda:{args.device}")
-    print(f"Working on device: {device}")
 
     # Get dataloaders directly from config
     train_loader = config['train_loader']
     test_loader = config['test_loader']
     
     # Extract training parameters from config
-    n_ensemble_models = config['n_ensemble_models']
-    n_variance_models = config['n_variance_models']
     # n_epochs = config['n_epochs']
     n_epochs = int(60000 / len(train_loader))
     eval_freq = config['eval_freq']
     pair_models = config['pair_models']
-    
-    # Get model classes - support both old and new config formats
-    mean_model_class = config.get('mean_model_class')
-    variance_model_class = config.get('variance_model_class')
-    
-    # Define model parameters
-    mean_model_params = config['mean_model_params']
-    variance_model_params = config['variance_model_params']
     
     # Setup results directory
     model_dir, results_dir = setup_result_directories(config_name)
     
     # Create mean ensemble
     mean_ensemble = config['mean_model']
-    # mean_ensemble = BaseEnsemble(
-    #     model_class=mean_model_class,
-    #     model_params=mean_model_params,
-    #     n_models=n_ensemble_models, 
-    #     device=device,
-    #     infer=config['mean_predictor']
-    # )
     
     # Create variance ensemble
     sigma_ensemble = config['variance_model']
-    # sigma_ensemble = IOCUE(
-    #     mean_ensemble=mean_ensemble,
-    #     model_class=variance_model_class,
-    #     model_params=variance_model_params,
-    #     n_models=n_variance_models, 
-    #     device=device,
-    #     # infer=config['variance_predictor']
-    # )
     
     if not args.visualize_only:
         print("Training models...")
