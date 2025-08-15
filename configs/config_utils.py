@@ -16,6 +16,8 @@ from predictors.mse import predict_mse, rmse
 from predictors.bayescap import predict_bayescap, bayescap_loss
 from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian, gen_gaussian_nll
 
+from models import BaseEnsemble
+from models.post_hoc_frameworks import IOCUE, BayesCap
 
 def load_yaml_config(file_path):
     """
@@ -34,16 +36,22 @@ def load_yaml_config(file_path):
     if not file_path.endswith('.yaml') and not file_path.endswith('.yml'):
         file_path += '.yaml'
     
-    try:
-        with open(file_path, 'r') as f:
-            config = yaml.safe_load(f)
+    with open(file_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Convert the loaded YAML to a fully-functioning config
+    config = resolve_config_references(config)
+    return config
+    # try:
+    #     with open(file_path, 'r') as f:
+    #         config = yaml.safe_load(f)
         
-        # Convert the loaded YAML to a fully-functioning config
-        config = resolve_config_references(config)
-        return config
-    except Exception as e:
-        print(f"Error loading YAML configuration: {str(e)}")
-        return None
+    #     # Convert the loaded YAML to a fully-functioning config
+    #     config = resolve_config_references(config)
+    #     return config
+    # except Exception as e:
+    #     print(f"Error loading YAML configuration: {str(e)}")
+    #     return None
 
 def resolve_config_references(config):
     """
@@ -78,20 +86,11 @@ def resolve_config_references(config):
     if 'mean_predictor' in config:
         predictor_name = config['mean_predictor']
         resolved_config['mean_predictor'] = resolve_predictor(predictor_name)
-    
-    if 'variance_predictor' in config:
-        predictor_name = config['variance_predictor']
-        resolved_config['variance_predictor'] = resolve_predictor(predictor_name)
 
     # Resolve criterion for mean model
     if 'mean_criterion' in config:
         criterion_name = config['mean_criterion']
         resolved_config['mean_criterion'] = resolve_criterion(criterion_name)
-    
-    # Resolve criterion for variance model
-    if 'variance_criterion' in config:
-        criterion_name = config['variance_criterion']
-        resolved_config['variance_criterion'] = resolve_criterion(criterion_name)
     
     # Generate dataloaders from dataset attributes if present
     if 'dataset_attrs' in config:
@@ -118,8 +117,36 @@ def resolve_config_references(config):
             resolved_config['variance_scheduler_params'] = None
         elif 'variance_scheduler_params' in config:
             resolved_config['variance_scheduler_params']['T_max'] = config['n_epochs']
+
+    # Resolve mean model
+    resolved_config['mean_model'] = BaseEnsemble(
+        model_class=resolved_config['mean_model_class'],
+        model_params=resolved_config['mean_model_params'],
+        n_models=resolved_config['n_ensemble_models'], 
+        device=resolved_config['device'],
+        infer=resolved_config['mean_predictor']
+    )
+
+    # Resolve variance model
+    variance_framework = resolve_framework(config.get('variance_framework'))
+    resolved_config['variance_model'] = variance_framework(
+        mean_ensemble=resolved_config['mean_model'],
+        model_class=resolved_config['variance_model_class'],
+        model_params=resolved_config['variance_model_params'],
+        n_models=resolved_config['n_variance_models'], 
+        device=resolved_config['device'],
+    )
     
     return resolved_config
+
+def resolve_framework(variance_framework_name):
+    if variance_framework_name == "iocue" or variance_framework_name == "io-cue":
+        return IOCUE
+    elif variance_framework_name == "bayescap" or variance_framework_name == "bayes-cap":
+        return BayesCap
+    else:
+        raise ValueError(f"Unknown framework: {variance_framework_name}")
+    
 
 def resolve_predictor(predictor_name):
     """

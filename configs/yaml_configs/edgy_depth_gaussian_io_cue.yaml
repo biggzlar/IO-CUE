@@ -6,7 +6,7 @@ n_variance_models: 1
 n_epochs: 64
 eval_freq: 5
 batch_size: 32
-pair_models: true
+pair_models: false
 
 # Dataset configuration
 dataset_name: simple_depth
@@ -44,6 +44,7 @@ mean_predictor: predict_mse
 mean_criterion: edge_aware_mse_loss
 
 # Variance model parameters
+variance_framework: iocue
 variance_model_params:
   in_channels: 4
   out_channels: [1]
@@ -57,5 +58,3 @@ variance_optimizer_params:
 variance_scheduler_type: CosineAnnealingLR
 variance_scheduler_params:
   T_max: 150
-variance_predictor: post_hoc_predict_gaussian
-variance_criterion: gaussian_nll_loss_detached

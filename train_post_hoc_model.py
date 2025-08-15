@@ -8,6 +8,7 @@ from configs.config_utils import (
     process_config_from_args,
     setup_result_directories
 )
+from models.post_hoc_frameworks.iocue import IOCUE
 
 # Ensure the results directory exists
 os.makedirs('results', exist_ok=True)
@@ -20,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument('--visualize-only', action='store_true', help='Skip training and only create visualizations')
     args = parser.parse_args()
     
+    # mean_ensemble_path = "results/base_unet/checkpoints/base_ensemble_final.pth"
     mean_ensemble_path = "results/pretrained/base_ensemble_model_best.pth"
 
     # Process config from args
@@ -57,23 +59,25 @@ if __name__ == "__main__":
     model_dir, results_dir = setup_result_directories(config_name)
     
     # Create mean ensemble
-    mean_ensemble = BaseEnsemble(
-        model_class=mean_model_class,
-        model_params=mean_model_params,
-        n_models=n_ensemble_models, 
-        device=device,
-        infer=config['mean_predictor']
-    )
+    mean_ensemble = config['mean_model']
+    # mean_ensemble = BaseEnsemble(
+    #     model_class=mean_model_class,
+    #     model_params=mean_model_params,
+    #     n_models=n_ensemble_models, 
+    #     device=device,
+    #     infer=config['mean_predictor']
+    # )
     
     # Create variance ensemble
-    sigma_ensemble = PostHocEnsemble(
-        mean_ensemble=mean_ensemble,
-        model_class=variance_model_class,
-        model_params=variance_model_params,
-        n_models=n_variance_models, 
-        device=device,
-        infer=config['variance_predictor']
-    )
+    sigma_ensemble = config['variance_model']
+    # sigma_ensemble = IOCUE(
+    #     mean_ensemble=mean_ensemble,
+    #     model_class=variance_model_class,
+    #     model_params=variance_model_params,
+    #     n_models=n_variance_models, 
+    #     device=device,
+    #     # infer=config['variance_predictor']
+    # )
     
     if not args.visualize_only:
         print("Training models...")
@@ -101,7 +105,6 @@ if __name__ == "__main__":
             )
     
         # Get variance training parameters
-        variance_criterion = config['variance_criterion']
         # Train the variance ensemble with explicit parameters
         sigma_ensemble.optimize(
             results_dir=results_dir,
@@ -114,7 +117,6 @@ if __name__ == "__main__":
             scheduler_type=config['variance_scheduler_type'],
             scheduler_params=config['variance_scheduler_params'],
             pair_models=pair_models,
-            criterion=variance_criterion,
             eval_freq=eval_freq
         )
     

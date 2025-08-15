@@ -13,7 +13,7 @@ from predictors.gaussian import gaussian_nll
 from predictors.bayescap import predict_bayescap
 
 class PostHocEnsemble(nn.Module):
-    def __init__(self, mean_ensemble, model_class, model_params, infer, n_models=5, device=None):
+    def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None):
         """
         Ensemble of variance prediction models for post-hoc uncertainty estimation
         
@@ -35,15 +35,16 @@ class PostHocEnsemble(nn.Module):
         for model in self.models:
             model.to(self.device)
 
-        self.infer = infer
-        self.is_bayescap = self.infer == predict_bayescap
+        # self.infer = infer
+        # self.is_bayescap = self.infer == predict_bayescap
+        self.is_bayescap = False
 
         self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'crps': [], 'p_value': []}
         self.overfit_counter = 0
 
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100,
               optimizer_type='Adam', optimizer_params=None, scheduler_type=None, 
-              scheduler_params=None, pair_models=False, criterion=None, eval_freq=100):
+              scheduler_params=None, pair_models=False, eval_freq=100):
         """
         Train the post-hoc ensemble for uncertainty estimation
         
@@ -116,16 +117,9 @@ class PostHocEnsemble(nn.Module):
                     optimizers[i].zero_grad()
 
                     # Forward pass for variance model
-                    if self.is_bayescap:
-                        params = self.models[i](batch_y_pred)
-                        loss = criterion(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs)
-                    else:
-                        if self.model_params['in_channels'] == (batch_X.shape[1] + 1):
-                            params = self.models[i](torch.concat([batch_X, batch_y_pred], dim=1))
-                        else:
-                            params = self.models[i](batch_X)
+                    params = self._predict(X=batch_X, y_pred=batch_y_pred, idx=i)
                         
-                        loss = criterion(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs)
+                    loss = self.loss(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs)
                     
                     # Backward pass
                     loss.backward()
@@ -135,10 +129,7 @@ class PostHocEnsemble(nn.Module):
                     epoch_losses[i] += loss.item()
 
             with torch.no_grad():
-                if self.is_bayescap:
-                    batch_post_hoc_preds = self.predict(batch_y_pred)
-                else:
-                    batch_post_hoc_preds = self.predict(batch_X, y_pred=batch_y_pred)
+                batch_post_hoc_preds = self.predict(batch_X, y_pred=batch_y_pred)
                 batch_sigma = batch_post_hoc_preds['sigma']
             
             # Update learning rate schedulers
@@ -217,13 +208,7 @@ class PostHocEnsemble(nn.Module):
                 all_base_means.append(base_mean)
                 
                 # Log variance predictions from variance ensemble
-                if self.is_bayescap:
-                    batch_post_hoc_preds = self.predict(base_mean)
-                else:
-                    if self.model_params['in_channels'] == (batch_X.shape[1] + 1):
-                        batch_post_hoc_preds = self.predict(batch_X, y_pred=base_mean)
-                    else:
-                        batch_post_hoc_preds = self.predict(batch_X)
+                batch_post_hoc_preds = self.predict(batch_X, y_pred=base_mean)
 
                 post_hoc_log_sigma = batch_post_hoc_preds['mean_log_sigma']
                 # Store predictions and targets
