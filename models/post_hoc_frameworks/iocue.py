@@ -5,7 +5,7 @@ from predictors.gaussian import post_hoc_predict_gaussian, gaussian_nll_detached
 from models.post_hoc_ensemble_model import PostHocEnsemble
 
 class IOCUE(PostHocEnsemble):
-    def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None):
+    def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None, infer=post_hoc_predict_gaussian, loss=gaussian_nll_detached):
         """
         Ensemble of variance prediction models for post-hoc uncertainty estimation
         
@@ -16,8 +16,8 @@ class IOCUE(PostHocEnsemble):
             device: Device to run the models on
         """
         super(IOCUE, self).__init__(mean_ensemble, model_class, model_params, n_models, device)
-        self.infer = post_hoc_predict_gaussian
-        self.loss  = gaussian_nll_detached
+        self.infer = infer
+        self.loss  = loss
 
     
     def _predict(self, X, y_pred=None, idx=None):
