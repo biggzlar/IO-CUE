@@ -175,13 +175,24 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
     print(f"Saved visualization to {out_path}")
     plt.close()
 
-def load_model(model_type, model_path, inference_fn, model_params, n_models, device, model_class=UNet):
+def load_mean_model(model_type, model_path, model_params, n_models, device, model_class=UNet, inference_fn=None):
     model = model_type(
+            model_class=model_class,
+            model_params=model_params,
+            n_models=n_models,
+            device=device,
+            infer=inference_fn
+        )
+    model.load(model_path)
+    return model
+
+def load_variance_model(mean_ensemble, model_type, model_path, model_params, n_models, device, model_class=UNet):
+    model = model_type(
+        mean_ensemble=mean_ensemble,
         model_class=model_class,
         model_params=model_params,
         n_models=n_models,
         device=device,
-        infer=inference_fn
     )
     model.load(model_path)
-    return model.eval()
+    return model

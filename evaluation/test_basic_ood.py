@@ -7,12 +7,14 @@ from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
 
 from models.base_ensemble_model import BaseEnsemble
 from models.post_hoc_ensemble_model import PostHocEnsemble
+# from models.post_hoc_frameworks.bayescap import BayesCap
+from models.post_hoc_frameworks import IOCUE, BayesCap
 from networks.unet_model import UNet, BabyUNet, MediumUNet
 from predictors.gaussian import post_hoc_predict_gaussian, predict_gaussian
 from predictors.bayescap import predict_bayescap
 from predictors.mse import predict_mse
 from evaluation.utils_ood import plot_ood_analysis
-from evaluation.eval_depth_utils import load_model
+from evaluation.eval_depth_utils import load_mean_model, load_variance_model
 
 
 def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
@@ -20,7 +22,7 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
     _, id_test_loader = id_dataset.get_dataloaders(batch_size=128, shuffle=False)
     _, ood_test_loader = ood_dataset.get_dataloaders(batch_size=128, shuffle=False)
 
-    base_model = load_model(
+    base_model = load_mean_model(
         BaseEnsemble, 
         model_path="results/pretrained/base_gaussian_ensemble.pth", 
         inference_fn=predict_gaussian, 
@@ -28,7 +30,7 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
         n_models=5, 
         device=device)
     
-    edgy_model = load_model(
+    edgy_model = load_mean_model(
         BaseEnsemble, 
         # model_path="results/base_unet_depth_model_augmented/checkpoints/base_ensemble_model_45.pth",
         model_path="results/pretrained/base_mse_ensemble.pth",
@@ -38,20 +40,20 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
         n_models=5, 
         device=device)
     
-    bayescap_model = load_model(
-        PostHocEnsemble, 
+    bayescap_model = load_variance_model(
+        mean_ensemble=edgy_model,
+        model_type=BayesCap, 
         model_path="results/pretrained/bayescap.pth", 
         # model_path="results/edgy_depth_bayescap_aug/checkpoints/post_hoc_ensemble_model_best.pt", 
-        inference_fn=predict_bayescap, 
         model_params={"in_channels": 1, "out_channels": [1, 1, 1], "drop_prob": 0.3}, 
         n_models=1, 
         device=device)
     
-    post_hoc_gaussian_model = load_model(
-        PostHocEnsemble, 
-        # model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
-        model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
-        inference_fn=post_hoc_predict_gaussian, 
+    post_hoc_gaussian_model = load_variance_model(
+        mean_ensemble=edgy_model,
+        model_type=IOCUE, 
+        model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
+        # model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
         model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3}, 
         n_models=1, 
         device=device,
@@ -87,7 +89,7 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
 
         id_sigmas_base.append(base_preds['ep_sigma'])
         id_sigmas_edgy.append(edgy_preds['ep_sigma'])
-        id_sigmas_bayescap.append(bayescap_model.predict(edgy_preds['mean'])['sigma'])
+        id_sigmas_bayescap.append(bayescap_model.predict(y_pred=edgy_preds['mean'])['sigma'])
         id_sigmas_post_hoc_gaussian.append(post_hoc_gaussian_model.predict(batch_X, y_pred=edgy_preds['mean'])['sigma'])
 
     for batch_X, batch_y in tqdm(ood_test_loader, desc=f"{dataset_name} OOD Inference"):
@@ -102,7 +104,7 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
 
         ood_sigmas_base.append(base_preds['ep_sigma'])
         ood_sigmas_edgy.append(edgy_preds['ep_sigma'])
-        ood_sigmas_bayescap.append(bayescap_model.predict(edgy_preds['mean'])['sigma'])
+        ood_sigmas_bayescap.append(bayescap_model.predict(y_pred=edgy_preds['mean'])['sigma'])
         ood_sigmas_post_hoc_gaussian.append(post_hoc_gaussian_model.predict(batch_X, y_pred=edgy_preds['mean'])['sigma'])
 
     all_id_results = {
@@ -198,6 +200,7 @@ if __name__ == "__main__":
     print("Running evaluation with NYU dataset (flipped)...")
     id_dataset_nyu = NYUDEPTH_dataset(img_size=(128, 160), augment=False)
     ood_dataset_nyu = NYUDEPTH_dataset(img_size=(128, 160), augment=True, flip=True)
+    ood_dataset_nyu.flip_prob = 1.0
     nyu_results = run_evaluation(id_dataset_nyu, ood_dataset_nyu, device, "NYU_flipped")
     
     # Run evaluation with Apolloscape dataset
