@@ -20,7 +20,7 @@ class BayesCap(PostHocEnsemble):
         self.loss  = bayescap_loss
 
     
-    def _predict(self, X, y_pred=None, idx=None):
+    def _predict(self, X=None, y_pred=None, idx=None):
         inputs = y_pred
         if idx is not None:
             return self.models[idx](inputs)
@@ -28,7 +28,7 @@ class BayesCap(PostHocEnsemble):
             return torch.stack([model(inputs) for model in self.models], dim=0)
         
 
-    def predict(self, X, y_pred=None):
+    def predict(self, X=None, y_pred=None):
         """
         Generate variance predictions from all models in the ensemble
         
@@ -43,8 +43,8 @@ class BayesCap(PostHocEnsemble):
             all_variances: (Optional) Individual model predictions if return_individual=True
         """
         # Convert input to tensor if it's a numpy array
-        if isinstance(X, np.ndarray):
-            X = torch.FloatTensor(X).to(self.device)
+        if isinstance(y_pred, np.ndarray):
+            y_pred = torch.FloatTensor(y_pred).to(self.device)
         
         # Set models to evaluation mode
         for model in self.models:
