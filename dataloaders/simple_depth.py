@@ -40,27 +40,35 @@ class DepthDataset:
         self.gaussianblur = gaussianblur
         self.grayscale = grayscale
         self.gaussian_noise = gaussian_noise
-        
-        if path is None:
+
+        self.flip_prob = 0.5 if flip else 0
+
+        self.path = path
+        self.img_size = img_size
+        self.train_split = train_split
+
+    def get_dataloaders(self, batch_size, shuffle=True):
+        if self.path is None:
             data = load_depth()
-            self.train_split_idx = int(len(data[0][0]) * train_split)
+            self.train_split_idx = int(len(data[0][0]) * self.train_split)
             train_data = split_data(data[0], self.train_split_idx)
             test_data = data[1]
 
-            self.train = _DepthDataset(train_data, img_size=img_size, augment=self.augment, 
-                                       flip=self.flip, colorjitter=self.colorjitter, 
-                                       gaussianblur=self.gaussianblur, grayscale=self.grayscale,
-                                       gaussian_noise=self.gaussian_noise)
-            self.test = _DepthDataset(test_data, img_size=img_size, augment=self.augment, 
-                                     flip=self.flip, colorjitter=self.colorjitter, 
-                                     gaussianblur=self.gaussianblur, grayscale=self.grayscale,
-                                     gaussian_noise=self.gaussian_noise)
+            self.train = _DepthDataset(train_data, img_size=self.img_size, augment=self.augment, 
+                flip=self.flip, colorjitter=self.colorjitter, 
+                gaussianblur=self.gaussianblur, grayscale=self.grayscale,
+                gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob
+            )
+            self.test = _DepthDataset(test_data, img_size=self.img_size, augment=self.augment, 
+                flip=self.flip, colorjitter=self.colorjitter, 
+                gaussianblur=self.gaussianblur, grayscale=self.grayscale,
+                gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob
+            )
         else:
-            data = load_depth_path(path)
+            data = load_depth_path(self.path)
             self.train = None
-            self.test = _DepthDataset(data, img_size=img_size)
+            self.test = _DepthDataset(data, img_size=self.img_size)
 
-    def get_dataloaders(self, batch_size, shuffle=True):
         train_loader = None
         test_loader = None
 
@@ -73,11 +81,11 @@ class DepthDataset:
     
 
 class _DepthDataset(Dataset):
-    def __init__(self, data, img_size=None, augment=False, flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False):
+    def __init__(self, data, img_size=None, augment=False, flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False, flip_prob=0):
         self.data = data
         self.augment = augment
         self.flip = flip
-        self.flip_prob = 1.0 if flip else 0
+        self.flip_prob = flip_prob
         self.gaussian_noise = gaussian_noise
         
         # Create input transform without flip
