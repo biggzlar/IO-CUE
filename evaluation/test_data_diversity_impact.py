@@ -12,10 +12,12 @@ import pickle
 from dataloaders.simple_depth import DepthDataset
 from models.base_ensemble_model import BaseEnsemble
 from models.post_hoc_ensemble_model import PostHocEnsemble
+from models.post_hoc_frameworks.iocue import IOCUE
 from networks.unet_model import UNet
-from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
+# from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
 from predictors.mse import predict_mse
-from predictors.gaussian import post_hoc_predict_gaussian
+
+from eval_depth_utils import load_mean_model, load_variance_model
 
 # Set up matplotlib style
 plt.rcParams.update({
@@ -81,36 +83,44 @@ def plot_metrics_across_models(nyu_metrics, apollo_metrics, save_dir, title_pref
     plt.savefig(os.path.join(save_dir, f"{title_prefix}combined_metrics.png"))
     plt.close()
 
-# --- MODEL LOADING ---
-def load_base_model(model_path, device):
-    """Load the base model from the given path"""
-    base_model = BaseEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
-        n_models=5,
-        device=device,
-        infer=predict_mse
-    )
-    base_model.load(model_path)
-    return base_model
+# # --- MODEL LOADING ---
+# def load_base_model(model_path, device):
+#     """Load the base model from the given path"""
+#     base_model = BaseEnsemble(
+#         model_class=UNet,
+#         model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
+#         n_models=5,
+#         device=device,
+#         infer=predict_mse
+#     )
+#     base_model.load(model_path)
+#     return base_model
 
-def load_post_hoc_model(model_path, device):
-    """Load a post-hoc model from the given path"""
-    post_hoc_model = PostHocEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3},
-        n_models=1,
-        device=device,
-        infer=post_hoc_predict_gaussian
-    )
-    post_hoc_model.load(model_path)
-    return post_hoc_model
+# def load_post_hoc_model(model_path, device):
+#     """Load a post-hoc model from the given path"""
+#     post_hoc_model = PostHocEnsemble(
+#         model_class=UNet,
+#         model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3},
+#         n_models=1,
+#         device=device,
+#         infer=post_hoc_predict_gaussian
+#     )
+#     post_hoc_model.load(model_path)
+#     return post_hoc_model
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     base_model_path = "results/pretrained/base_mse_ensemble.pth"
-    base_model = load_base_model(base_model_path, device)
+    base_model = load_mean_model(
+        model_type=BaseEnsemble,
+        model_class=UNet,
+        model_path=base_model_path, 
+        model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
+        n_models=5,
+        device=device,
+        inference_fn=predict_mse
+    )
     model_paths = {
         'edgy_depth_01': "results/edgy_depth_01/checkpoints/variance_ensemble.pt",
         'edgy_depth_01_aug': "results/edgy_depth_01_aug/checkpoints/variance_ensemble.pt",
@@ -135,10 +145,18 @@ def main():
     for name in MODEL_ORDER:
         print(f"Evaluating {name}...")
         if os.path.exists(model_paths[name]):
-            model = load_post_hoc_model(model_paths[name], device)
-            eval_result = model.evaluate(test_loader, base_model)
+            model = load_variance_model(
+                mean_ensemble=base_model,
+                model_type=IOCUE,
+                model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3},
+                model_path=model_paths[name], 
+                n_models=1,
+                device=device
+            )
+            eval_result = model.evaluate(test_loader)
             metrics = eval_result['metrics']
-            apollo_metrics[name] = {k: [float(v)] for k, v in metrics.items()}
+            # import ipdb; ipdb.set_trace()
+            apollo_metrics[name] = {k: [np.float32(v)] for k, v in metrics.items()}
         else:
             apollo_metrics[name] = {}
     print("Plotting combined metrics (NYU & Apolloscape)...")
