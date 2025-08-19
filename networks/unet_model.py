@@ -326,8 +326,77 @@ class BabyUNet(nn.Module):
         return outputs
 
 
+class SmallUNet(nn.Module):
+    def __init__(self, in_channels, out_channels, drop_prob=0.1, activation=torch.nn.ReLU, return_activations=False):
+        super(SmallUNet, self).__init__()
+        self.opts = locals().copy()
+        del self.opts['self']
+        
+        # Encoder - reduced to 3 blocks
+        self.conv1_1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
+        self.conv1_2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.drop1 = nn.Dropout2d(drop_prob)
+        
+        self.conv2_1 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv2_2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.drop2 = nn.Dropout2d(drop_prob)
+        
+        self.conv3_1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv3_2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        
+        # Decoder - reduced to 2 blocks
+        self.upconv3 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.conv4_1 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        self.conv4_2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        
+        self.upconv4 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        
+        self.heads = nn.ModuleList()
+        for c in out_channels:
+            head = torch.nn.Sequential(
+                nn.Conv2d(64, 32, kernel_size=3, padding=1),
+                activation(),
+                nn.Conv2d(32, 32, kernel_size=3, padding=1),
+                activation(),
+                nn.Conv2d(32, c, kernel_size=1)
+            )
+            self.heads.append(head)        
+        
+        self.activation = activation()
+        
+    def forward(self, x):
+        # Encoder
+        conv1 = self.activation(self.conv1_1(x))
+        conv1 = self.activation(self.conv1_2(conv1))
+        pool1 = self.pool1(conv1)
+        pool1 = self.drop1(pool1)
+        
+        conv2 = self.activation(self.conv2_1(pool1))
+        conv2 = self.activation(self.conv2_2(conv2))
+        pool2 = self.pool2(conv2)
+        pool2 = self.drop2(pool2)
+        
+        conv3 = self.activation(self.conv3_1(pool2))
+        conv3 = self.activation(self.conv3_2(conv3))
+        
+        # Decoder with skip connections
+        up_conv3 = self.upconv3(conv3)
+        concat4 = torch.cat([up_conv3, conv2], dim=1)
+        conv4 = self.activation(self.conv4_1(concat4))
+        conv4 = self.activation(self.conv4_2(conv4))
+        
+        up_conv4 = self.upconv4(conv4)
+        concat5 = torch.cat([up_conv4, conv1], dim=1)
+        
+        outputs = torch.concat([head(concat5) for head in self.heads], dim=1)        
+        
+        return outputs
+
+
 class MediumUNet(nn.Module):
-    def __init__(self, in_channels, out_channels, drop_prob=0.1, activation=torch.nn.ReLU):
+    def __init__(self, in_channels, out_channels, drop_prob=0.1, activation=torch.nn.ReLU, return_activations=False):
         super(MediumUNet, self).__init__()
         self.opts = locals().copy()
         del self.opts['self']
