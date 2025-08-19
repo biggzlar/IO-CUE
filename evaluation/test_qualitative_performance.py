@@ -1,26 +1,21 @@
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
-from pathlib import Path
-
-from evaluation.metrics import compute_ece, compute_nll, compute_euc
 
 # Add current directory to path
 sys.path.append(os.getcwd())
 
 from dataloaders.simple_depth import DepthDataset
 from models.base_ensemble_model import BaseEnsemble
-from models.post_hoc_ensemble_model import PostHocEnsemble
 from models.ttda_model import TTDAModel
 from networks.unet_model import UNet
-from evaluation.eval_depth_utils import get_predictions
+from evaluation.eval_depth_utils import get_predictions, load_mean_model, load_variance_model
+from models.post_hoc_frameworks import IOCUE, BayesCap
 
-from predictors.bayescap import predict_bayescap
 from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian
 from predictors.mse import predict_mse
-from predictors.gaussian import post_hoc_predict_gaussian, predict_gaussian
+from predictors.gaussian import predict_gaussian
 # Set up matplotlib style
 plt.rcParams.update({
     "font.size": 32,
@@ -29,105 +24,6 @@ plt.rcParams.update({
     "mathtext.fontset": "stix",
 })
 
-def custom_infer(preds):
-    """Custom inference function for models that may output 1 or 2 channels"""
-    if preds.shape[1] == 2:
-        # Model outputs both mean and log_sigma
-        mu, log_sigma = torch.split(preds, 1, dim=1)
-        sigma = torch.exp(log_sigma)
-        return {"mean": mu, "sigma": sigma, "log_sigma": log_sigma}
-    else:
-        # Model only outputs mean
-        mean = preds
-        log_sigma = torch.ones_like(mean) * -3  # Default small uncertainty
-        sigma = torch.exp(log_sigma)
-        return {"mean": mean, "sigma": sigma, "log_sigma": log_sigma}
-
-def load_base_model(model_path, device):
-    """Load the base model from the given path"""
-    infer = predict_mse
-
-    base_model = BaseEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
-        n_models=5,
-        device=device,
-        infer=infer
-    )
-    base_model.load(model_path)
-    return base_model
-
-def load_gaussian_base_model(model_path, device):
-    """Load the base model from the given path"""
-    infer = predict_gaussian
-
-    base_model = BaseEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 3, "out_channels": [1, 1], "drop_prob": 0.2},
-        n_models=5,
-        device=device,
-        infer=infer
-    )
-    base_model.load(model_path)
-    return base_model
-
-def load_bayescap_model(model_path, device):
-    """Load the BayesCap post-hoc model"""
-    infer = predict_bayescap
-
-    # BayesCap model has 1 input channel and 3 output heads
-    post_hoc_model = PostHocEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 1, "out_channels": [1, 1, 1], "drop_prob": 0.2},
-        n_models=1,
-        device=device,
-        infer=infer
-    )
-    post_hoc_model.is_bayescap = True
-    post_hoc_model.load(model_path)
-    return post_hoc_model
-
-def load_gaussian_model(model_path, device):
-    """Load the Gaussian post-hoc model"""
-    infer = post_hoc_predict_gaussian
-
-    post_hoc_model = PostHocEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.2},
-        n_models=1,
-        device=device,
-        infer=infer
-    )
-    post_hoc_model.load(model_path)
-    return post_hoc_model
-
-def load_gen_gaussian_model(model_path, device):
-    """Load the Generative Gaussian post-hoc model"""
-    infer = post_hoc_predict_gen_gaussian
-
-    # Gen Gaussian model has 3 input channels and 2 output heads
-    post_hoc_model = PostHocEnsemble(
-        model_class=UNet,
-        model_params={"in_channels": 4, "out_channels": [1, 1], "drop_prob": 0.2},
-        n_models=1,
-        device=device,
-        infer=infer
-    )
-    post_hoc_model.load(model_path)
-    return post_hoc_model
-
-def load_ttda_model(model_path, device):
-    """Load TTDA model from the given path"""
-    infer = predict_mse
-
-    ttda_model = TTDAModel(
-        model_class=UNet,
-        model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
-        device=device,
-        infer=infer
-    )
-    ttda_model.load(model_path)
-    return ttda_model
 
 def plot_uncertainty_comparison(test_loader, base_model, bayescap_model, edgy_model, gen_gaussian_model, gaussian_model, ttda_model, n_samples=5, max_eval_samples=100, save_path="results/uncertainty_comparison.png"):
     """
@@ -184,7 +80,7 @@ def plot_uncertainty_comparison(test_loader, base_model, bayescap_model, edgy_mo
             error_batch = torch.abs(mu_batch - depths)
             
             # Get BayesCap predictions
-            bayescap_preds = bayescap_model.predict(mu_batch)
+            bayescap_preds = bayescap_model.predict(y_pred=mu_batch)
             bayescap_sigma = bayescap_preds['sigma']
             
             # Get Gen Gaussian predictions
@@ -226,96 +122,6 @@ def plot_uncertainty_comparison(test_loader, base_model, bayescap_model, edgy_mo
     all_gen_gaussian_sigma = torch.cat(all_gen_gaussian_sigma, dim=0)
     all_error_batch = torch.cat(all_error_batch, dim=0)
     
-    # Get evaluation metrics
-    print("Evaluating models on the full test set...")
-    base_eval = base_model.evaluate(test_loader)
-    ttda_eval = ttda_model.evaluate(test_loader)
-    
-    # PostHoc models need the mean ensemble model
-    bayescap_eval = bayescap_model.evaluate(test_loader, edgy_model)
-    gaussian_eval = gaussian_model.evaluate(test_loader, edgy_model)
-    gen_gaussian_eval = gen_gaussian_model.evaluate(test_loader, edgy_model)
-
-    # import ipdb; ipdb.set_trace()
-    
-    # print("Computing calibration metrics...")
-    # # Calculate calibration metrics for the whole dataset
-    # all_uncertainties = []
-    # for batch_X, batch_y in test_loader:
-    #     batch_X = batch_X.to(base_model.device)
-    #     batch_y = batch_y.to(base_model.device)
-        
-    #     # Get predictions
-    #     base_preds = base_model.predict(batch_X)
-    #     edgy_preds = edgy_model.predict(batch_X)
-    #     mu = edgy_preds['mean']
-        
-    #     # Get uncertainties
-    #     base_sigma = base_preds['al_sigma']
-        
-    #     ttda_preds = ttda_model.predict(batch_X, return_individual=True)
-    #     ttda_std = torch.std(ttda_preds['all_means'], dim=0)
-        
-    #     bayescap_sigma = bayescap_model.predict(mu)['sigma']
-    #     gaussian_sigma = gaussian_model.predict(batch_X, y_pred=mu)['sigma']
-    #     gen_gaussian_sigma = gen_gaussian_model.predict(batch_X, y_pred=mu)['sigma']
-        
-    #     # Store results
-    #     all_uncertainties.append({
-    #         'mu': mu.cpu(),
-    #         'y_true': batch_y.cpu(),
-    #         'base': base_sigma.cpu(),
-    #         'ttda': ttda_std.cpu(),
-    #         'bayescap': bayescap_sigma.cpu(),
-    #         'gaussian': gaussian_sigma.cpu(),
-    #         'gen_gaussian': gen_gaussian_sigma.cpu()
-    #     })
-    
-    # # Concat all uncertainties
-    # concat_mu = torch.cat([d['mu'] for d in all_uncertainties], dim=0)
-    # concat_y = torch.cat([d['y_true'] for d in all_uncertainties], dim=0)
-    # concat_base = torch.cat([d['base'] for d in all_uncertainties], dim=0)
-    # concat_ttda = torch.cat([d['ttda'] for d in all_uncertainties], dim=0)
-    # concat_bayescap = torch.cat([d['bayescap'] for d in all_uncertainties], dim=0)
-    # concat_gaussian = torch.cat([d['gaussian'] for d in all_uncertainties], dim=0)
-    # concat_gen_gaussian = torch.cat([d['gen_gaussian'] for d in all_uncertainties], dim=0)
-        
-    # # Format: (method_name, uncertainty_value)
-    # uncertainty_methods = [
-    #     ("Base", concat_base),
-    #     ("TTDA", concat_ttda),
-    #     ("BayesCap", concat_bayescap),
-    #     ("Gaussian", concat_gaussian),
-    #     ("Gen Gaussian", concat_gen_gaussian)
-    # ]
-    
-    # # Calculate metrics for each method
-    # metrics = {}
-    # for method_name, uncertainty in uncertainty_methods:
-    #     residuals = torch.abs(concat_mu - concat_y)
-    #     ece, _ = compute_ece(residuals, uncertainty)
-    #     nll = compute_nll(concat_mu, uncertainty, concat_y)
-    #     euc, _ = compute_euc(concat_mu, uncertainty, concat_y)
-    #     metrics[method_name] = {
-    #         'ECE': float(ece.mean()),
-    #         'NLL': float(nll.mean()),
-    #         'EUC': float(euc.mean())
-    #     }
-    
-    # # Add RMSE from each model's evaluation
-    # metrics['Base']['RMSE'] = base_eval['rmse']
-    # metrics['TTDA']['RMSE'] = ttda_eval['rmse']
-    # metrics['BayesCap']['RMSE'] = bayescap_eval['metrics']['rmse'].item()
-    # metrics['Gaussian']['RMSE'] = gaussian_eval['metrics']['rmse'].item()
-    # metrics['Gen Gaussian']['RMSE'] = gen_gaussian_eval['metrics']['rmse'].item()
-    
-    # # Function to format metrics into a string
-    # def format_metrics(method_name):
-    #     if method_name not in metrics:
-    #         return ""
-    #     m = metrics[method_name]
-    #     return f"ECE: {m['ECE']:.4f}, NLL: {m['NLL']:.4f},\nEUC: {m['EUC']:.4f}, RMSE: {m['RMSE']:.4f}"
-    
     print(f"Creating visualization with {n_samples} samples...")
     
     # Set column titles
@@ -328,27 +134,6 @@ def plot_uncertainty_comparison(test_loader, base_model, bayescap_model, edgy_mo
     # Handle case where n_samples = 1
     if n_samples == 1:
         axes = axes.reshape(1, -1)
-
-    # for i, title in enumerate(titles):
-    #     # Add metrics to uncertainty method titles
-    #     if i == 4:  # TTDA
-    #         metric_str = format_metrics("TTDA")
-    #         # axes[0, i].set_title(f"{title}\n{metric_str}")
-    #         axes[0, i].set_title(f"{title}")
-    #     elif i == 5:  # BayesCap
-    #         metric_str = format_metrics("BayesCap")
-    #         axes[0, i].set_title(f"{title}")
-    #     elif i == 6:  # Gaussian (Base)
-    #         metric_str = format_metrics("Base")
-    #         axes[0, i].set_title(f"{title}")
-    #     elif i == 7:  # Post Hoc Gaussian
-    #         metric_str = format_metrics("Gaussian")
-    #         axes[0, i].set_title(f"{title}")
-    #     elif i == 8:  # Post Hoc Gen Gaussian
-    #         metric_str = format_metrics("Gen Gaussian")
-    #         axes[0, i].set_title(f"{title}")
-    #     else:
-    #         axes[0, i].set_title(title)
 
     error_colormap = 'rainbow'
     # uncertainty_colormap = 'cubehelix'
@@ -472,19 +257,63 @@ def main():
     
     # Load models
     print("Loading base model...")
-    base_model = load_gaussian_base_model(base_model_path, device)
+    base_model = load_mean_model(
+        model_type=BaseEnsemble,
+        model_path=base_model_path,
+        model_params={"in_channels": 3, "out_channels": [1, 1], "drop_prob": 0.2},
+        n_models=5,
+        device=device,
+        model_class=UNet,
+        inference_fn=predict_gaussian,
+    )
     
     print("Loading BayesCap model...")
-    bayescap_model = load_bayescap_model(bayescap_model_path, device)
+    # Load edgy (mean) model first using mean loader
     
     print("Loading Edgy Depth model...")
-    edgy_model = load_base_model(edgy_model_path, device)
+    edgy_model = load_mean_model(
+        model_type=BaseEnsemble,
+        model_path=edgy_model_path,
+        model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2},
+        n_models=5,
+        device=device,
+        model_class=UNet,
+        inference_fn=predict_mse,
+    )
+
+    bayescap_model = load_variance_model(
+        mean_ensemble=edgy_model,
+        model_type=BayesCap,
+        model_path=bayescap_model_path,
+        model_params={"in_channels": 1, "out_channels": [1, 1, 1], "drop_prob": 0.2},
+        n_models=1,
+        device=device,
+        model_class=UNet,
+    )
     
     print("Loading Gen Gaussian model...")
-    gen_gaussian_model = load_gen_gaussian_model(gen_gaussian_model_path, device)
+    gen_gaussian_model = load_variance_model(
+        mean_ensemble=edgy_model,
+        model_type=IOCUE,
+        model_path=gen_gaussian_model_path,
+        model_params={"in_channels": 4, "out_channels": [1, 1], "drop_prob": 0.2},
+        n_models=1,
+        device=device,
+        model_class=UNet,
+    )
+    # Override inference to generalized Gaussian
+    gen_gaussian_model.infer = post_hoc_predict_gen_gaussian
 
     print("Loading Gaussian model...")
-    gaussian_model = load_gaussian_model(gaussian_model_path, device)
+    gaussian_model = load_variance_model(
+        mean_ensemble=edgy_model,
+        model_type=IOCUE,
+        model_path=gaussian_model_path,
+        model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.2},
+        n_models=1,
+        device=device,
+        model_class=UNet,
+    )
     
     print("Setting up TTDA model...")
     # TTDA uses the base model with test-time augmentations
