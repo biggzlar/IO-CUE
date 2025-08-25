@@ -11,8 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from networks.simple_regression_model import SimpleRegressionModel
 from intro_experiments.dataset import generate_data, ground_truth_function, ground_truth_noise
 from models.base_ensemble_model import BaseEnsemble
-from models.post_hoc_ensemble_model import PostHocEnsemble
-from predictors.gaussian import gaussian_nll, gaussian_nll_detached, predict_gaussian, post_hoc_predict_gaussian
+from models.post_hoc_frameworks import ICUE
+from predictors.gaussian import gaussian_nll, predict_gaussian
 from predictors.mse import mse, predict_mse
 
 plt.rcParams.update(
@@ -25,8 +25,9 @@ plt.rcParams.update(
 )
 
 # Set random seeds for reproducibility
-torch.manual_seed(42)
-np.random.seed(42)
+seed_no = 3
+torch.manual_seed(seed_no)
+np.random.seed(seed_no)
 
 # Device configuration
 device = "cpu"
@@ -115,15 +116,6 @@ def main():
         'output_dim': 1,  # log_sigma for post-hoc Gaussian
     }
     
-    # Create post-hoc ensemble
-    posthoc_ensemble = PostHocEnsemble(
-        model_class=SimpleRegressionModel,
-        model_params=posthoc_model_params,
-        infer=post_hoc_predict_gaussian,
-        n_models=n_ensemble,
-        device=device
-    )
-    
     # Define optimizer parameters
     base_optimizer_params = {
         'lr': base_lr,
@@ -162,6 +154,17 @@ def main():
         criterion=mse,
         eval_freq=20
     )
+
+    # Create post-hoc ensemble
+    # Note, we're passing an untrained mean ensemble here
+    posthoc_ensemble = ICUE(
+        mean_ensemble=mse_base_ensemble,
+        model_class=SimpleRegressionModel,
+        model_params=posthoc_model_params,
+        # infer=post_hoc_predict_gaussian,
+        n_models=n_ensemble,
+        device=device
+    )
     
     # Train post-hoc ensemble model (using MSE base model)
     print(f"Training post-hoc ensemble model...")
@@ -169,12 +172,12 @@ def main():
         results_dir=results_dir,
         model_dir=model_dir,
         train_loader=train_loader,
-        mean_ensemble=mse_base_ensemble,  # Pass the MSE base ensemble for mean predictions
+        # mean_ensemble=mse_base_ensemble,  # Pass the MSE base ensemble for mean predictions
         test_loader=test_loader,
         n_epochs=posthoc_n_epochs,
         optimizer_type='Adam',
         optimizer_params=posthoc_optimizer_params,
-        criterion=gaussian_nll_detached,
+        # criterion=gaussian_nll_detached,
         eval_freq=20
     )
     

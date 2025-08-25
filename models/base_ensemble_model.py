@@ -32,7 +32,7 @@ class BaseEnsemble(nn.Module):
             model.to(self.device)
 
         self.infer = infer
-        self.min_mse = float('inf')
+        self.min_nll = float('inf')
         self.overfit_counter = 0
 
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100, 
@@ -59,7 +59,7 @@ class BaseEnsemble(nn.Module):
         dataloaders = []
         finished = [False] * self.n_models
 
-        self.min_mse = float('inf')
+        self.min_nll = float('inf')
         
         # Create a bootstrapped dataloader for each model
         for i in range(self.n_models):
@@ -165,8 +165,8 @@ class BaseEnsemble(nn.Module):
                     plt.savefig(f"{results_dir}/base_ensemble_model_{epoch + 1}.png")
                     plt.close()
 
-                if test_rmse < self.min_mse:
-                    self.min_mse = test_rmse
+                if test_nll < self.min_nll:
+                    self.min_nll = test_nll
                     self.save(f"{model_dir}/base_ensemble_model_best.pt")
                     self.overfit_counter = 0
                 else:
