@@ -29,7 +29,7 @@ torch.manual_seed(42)
 np.random.seed(42)
 
 # Device configuration
-device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+device = "cpu"
 
 def main():
     # Fixed parameters
