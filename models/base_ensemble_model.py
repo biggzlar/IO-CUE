@@ -143,7 +143,7 @@ class BaseEnsemble(nn.Module):
             pbar.set_postfix({"loss": f"{avg_loss:.4f}"})
             
             # Evaluate on test set if requested
-            if test_loader is not None and (epoch + 1) % eval_freq == 0:
+            if test_loader is not None and epoch % eval_freq == 0:
                 results = self.evaluate(test_loader)
                 test_rmse = results['rmse']
                 test_nll = results['nll']

@@ -146,7 +146,7 @@ class PostHocEnsemble(nn.Module):
                               "sigma": f"{batch_sigma.mean().item():.2f}"})
             
             # Evaluate on test set if requested
-            if test_loader is not None and (epoch + 1) % eval_freq == 0:
+            if test_loader is not None and epoch % eval_freq == 0:
                 results = self.evaluate(test_loader)
                 
                 print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
