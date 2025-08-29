@@ -12,12 +12,11 @@ from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
 
 from models.base_ensemble_model import BaseEnsemble
 from models.post_hoc_ensemble_model import PostHocEnsemble
+from models.post_hoc_frameworks import IOCUE
 from networks.unet_model import UNet, BabyUNet, MediumUNet
-from predictors.gaussian import post_hoc_predict_gaussian, predict_gaussian, gaussian_nll
-from predictors.bayescap import predict_bayescap
+from predictors.gaussian import predict_gaussian, gaussian_nll
 from predictors.mse import predict_mse, rmse
-from evaluation.utils_ood import plot_ood_analysis
-from evaluation.eval_depth_utils import load_model
+from evaluation.eval_depth_utils import load_mean_model, load_variance_model
 
 
 def apply_gaussian_noise(batch, sigma):
@@ -42,7 +41,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Load models
-    base_model = load_model(
+    base_model = load_mean_model(
         BaseEnsemble, 
         model_path="results/pretrained/base_gaussian_ensemble.pth", 
         inference_fn=predict_gaussian, 
@@ -50,7 +49,7 @@ if __name__ == "__main__":
         n_models=5, 
         device=device)
     
-    edgy_model = load_model(
+    edgy_model = load_mean_model(
         BaseEnsemble, 
         model_path="results/base_unet_depth_model_very_augmented/checkpoints/base_ensemble_model_95.pth", 
         inference_fn=predict_mse, 
@@ -58,10 +57,11 @@ if __name__ == "__main__":
         n_models=5, 
         device=device)
     
-    post_hoc_gaussian_model = load_model(
+    post_hoc_gaussian_model = load_variance_model(
         PostHocEnsemble, 
+        model_type=IOCUE,
         model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
-        inference_fn=post_hoc_predict_gaussian, 
+        # inference_fn=post_hoc_predict_gaussian, 
         model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3}, 
         n_models=1, 
         device=device,
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         # Post-hoc model (concatenate input with mean prediction)
         edgy_mean = edgy_pred['mean']
         combined_input = torch.cat([inputs, edgy_mean], dim=1)
-        post_hoc_pred = post_hoc_gaussian_model.predict(combined_input)
+        post_hoc_pred = post_hoc_gaussian_model.predict(X=inputs, y_pred=edgy_mean)
         print("Post-hoc model predict keys:", list(post_hoc_pred.keys()))
     
     # Iterate over noise levels

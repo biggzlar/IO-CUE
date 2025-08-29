@@ -11,7 +11,7 @@ from models.post_hoc_ensemble_model import PostHocEnsemble
 from networks.unet_model import UNet
 from predictors.gaussian import post_hoc_predict_gaussian
 from predictors.mse import predict_mse
-from evaluation.eval_depth_utils import load_model
+from evaluation.eval_depth_utils import load_mean_model, load_variance_model
 
 plt.rcParams.update(
     {
@@ -51,14 +51,14 @@ if __name__ == "__main__":
             "grayscale": "results/base_unet_with_grayscale/checkpoints/base_ensemble_model_best.pt"
         }
         base_models = {
-            model_name: load_model(BaseEnsemble, 
+            model_name: load_mean_model(BaseEnsemble, 
                 model_path=path, 
                 inference_fn=predict_mse, 
                 model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2}, 
                 n_models=5, device=device) for model_name, path in base_model_paths.items()
         }
 
-        post_hoc_gaussian_model = load_model(
+        post_hoc_gaussian_model = load_variance_model(
             PostHocEnsemble, 
             model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
             # model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
