@@ -215,17 +215,17 @@ def main():
     # Plot 1: Gaussian base model with its uncertainty (left)
     axs[0].scatter(X_train[:50], y_train[:50], marker='x', color='k')
     axs[0].plot(x_plot, y_true, color='gray', label='Ground Truth')
-    axs[0].plot(x_plot, gaussian_mean, color='#8a2be280', label='Gaussian Ensemble Mean')
+    axs[0].plot(x_plot, gaussian_mean, color='#FF6B6B', label='Gaussian Ensemble Mean')
     axs[0].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[0].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
     axs[0].fill_between(x_plot.flatten(), 
                      gaussian_mean.flatten() - 2 * gaussian_sigma.flatten(), 
                      gaussian_mean.flatten() + 2 * gaussian_sigma.flatten(), 
-                     color='#8a2be280', alpha=0.3, label=r'Gaussian Uncertainty $\left( \pm 2\sigma \right)$',
+                     color='#FF6B6B', alpha=0.3, label=r'Gaussian Uncertainty $\left( \pm 2\sigma \right)$',
                      linewidth=0)
-    axs[0].set_xlabel('x')
-    axs[0].set_ylabel('y')
-    axs[0].set_title('Model trained on Gaussian NLL')
+    axs[0].set_xlabel(r'$x$', fontsize=18)
+    axs[0].set_ylabel(r'$y$', fontsize=18)
+    axs[0].set_title(r'$\mathbf{(a)}$ Model trained on Gaussian NLL')
     axs[0].legend(ncol=2, loc='upper center')
     axs[0].set_ylim(-4, 4)
     axs[0].set_xlim(ood_lower, ood_upper)
@@ -233,33 +233,32 @@ def main():
     # Plot 2: MSE base model mean with post-hoc uncertainty (middle)
     axs[1].scatter(X_train[:50], y_train[:50], marker='x', color='k')
     axs[1].plot(x_plot, y_true, color='gray', label='Ground Truth')
-    axs[1].plot(x_plot, mse_mean, color='#8a2be280', label='MSE Ensemble Mean')
+    axs[1].plot(x_plot, mse_mean, color='#8a2be2', label='MSE Ensemble Mean')
     axs[1].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[1].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
     axs[1].fill_between(x_plot.flatten(), 
                      mse_mean.flatten() - 2 * posthoc_sigma.flatten(), 
                      mse_mean.flatten() + 2 * posthoc_sigma.flatten(), 
-                     color='#8a2be280', alpha=0.3, label=r'Post-hoc Uncertainty $\left( \pm 2\sigma \right)$',
+                     color='#8a2be2', alpha=0.3, label=r'Post-hoc Uncertainty $\left( \pm 2\sigma \right)$',
                      linewidth=0)
-    axs[1].set_xlabel('x')
-    axs[1].set_ylabel('y')
-    axs[1].set_title('Model trained on MSE with Post-hoc Uncertainty')
+    axs[1].set_xlabel(r'$x$', fontsize=18)
+    axs[1].set_ylabel(r'$y$', fontsize=18)
+    axs[1].set_title(r'$\mathbf{(b)}$ Model trained on MSE with Post-hoc Uncertainty')
     axs[1].legend(ncol=2, loc='upper center')
     axs[1].set_ylim(-4, 4)
     axs[1].set_xlim(ood_lower, ood_upper)
     
     # Plot 3: Comparison of noise predictions (right)
-    axs[2].plot(x_plot, true_noise, 'k-', label='Ground Truth Noise (σ)')
-    axs[2].plot(x_plot, gaussian_sigma, 'g-', label='Gaussian Predicted Noise (σ)')
-    axs[2].plot(x_plot, posthoc_sigma, 'r-', label='Post-hoc Predicted Noise (σ)')
-    
+    axs[2].plot(x_plot, true_noise, 'k-', label=r'Ground Truth Noise ($\sigma$)')
+    axs[2].plot(x_plot, gaussian_sigma, linewidth=2, color='#FF6B6B', label=r'Gaussian Predicted Noise ($\sigma$)')
     # Plot OOD regions
     axs[2].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[2].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
+    axs[2].plot(x_plot, posthoc_sigma, linewidth=2, color='#8a2be2', label=r'Post-hoc Predicted Noise ($\sigma$)')
     
-    axs[2].set_xlabel('x')
-    axs[2].set_ylabel('Standard Deviation (σ)')
-    axs[2].set_title('Uncertainty prediction comparison vs. ground truth')
+    axs[2].set_xlabel(r'$x$', fontsize=18)
+    axs[2].set_ylabel(r'Standard Deviation ($\sigma$)', fontsize=18)
+    axs[2].set_title(r'$\mathbf{(c)}$ Uncertainty prediction comparison vs. ground truth')
     axs[2].set_ylim(-0.1, 2.)
     axs[2].set_xlim(ood_lower, ood_upper)
     axs[2].legend(ncol=2, loc='upper center')

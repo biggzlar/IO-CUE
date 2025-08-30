@@ -205,18 +205,18 @@ def main(args):
     # Plot 1: Base model mean with Bayescap uncertainty (top left)
     axs[0].scatter(X_train[:50], y_train[:50], marker='x', color='k')
     axs[0].plot(x_plot, y_true, color='gray', label='Ground Truth')
-    axs[0].plot(x_plot, base_mean, color='#8a2be280', label='Base Model Mean')
+    axs[0].plot(x_plot, base_mean, linewidth=2, color='#20B2AA', label='Base Model Mean')
     axs[0].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[0].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
     axs[0].fill_between(x_plot.flatten(), 
         base_mean.flatten() - 2 * bayescap_sigma.flatten(), 
         base_mean.flatten() + 2 * bayescap_sigma.flatten(), 
-        color='#8a2be280', alpha=0.3, label=r'Bayescap Uncertainty $\left( \pm 2\sigma \right)$',
+        color='#20B2AA', alpha=0.3, label=r'Bayescap Uncertainty $\left( \pm 2\sigma \right)$',
         linewidth=0)
     
-    axs[0].set_xlabel('x')
-    axs[0].set_ylabel('y')
-    axs[0].set_title('(BayesCap) Estimated on base model outputs')
+    axs[0].set_xlabel(r'$x$', fontsize=18)
+    axs[0].set_ylabel(r'$y$', fontsize=18)
+    axs[0].set_title(r'$\mathbf{(a)}$ BayesCap: Estimated on base model outputs')
     axs[0].legend(ncol=2, loc='upper center')
     axs[0].set_ylim(-4, 4)
     axs[0].set_xlim(ood_lower, ood_upper)
@@ -225,34 +225,33 @@ def main(args):
     # Plot 2: Base model mean with Gaussian uncertainty (top right)
     axs[1].scatter(X_train[:50], y_train[:50], marker='x', color='k')
     axs[1].plot(x_plot, y_true, color='gray', label='Ground Truth')
-    axs[1].plot(x_plot, base_mean, color='#8a2be280', label='Base Model Mean')
+    axs[1].plot(x_plot, base_mean, linewidth=2, color='#8a2be2', label='Base Model Mean')
     axs[1].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[1].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
     axs[1].fill_between(x_plot.flatten(), 
         base_mean.flatten() - 2 * gaussian_sigma.flatten(), 
         base_mean.flatten() + 2 * gaussian_sigma.flatten(), 
-        color='#8a2be280', alpha=0.3, label=r'Post-hoc Uncertainty $\left( \pm 2\sigma \right)$',
+        color='#8a2be2', alpha=0.3, label=r'Post-hoc Uncertainty $\left( \pm 2\sigma \right)$',
         linewidth=0)
     
-    axs[1].set_xlabel('x')
-    axs[1].set_ylabel('y')
-    axs[1].set_title('(Ours) Estimated on base model inputs')
+    axs[1].set_xlabel(r'$x$', fontsize=18)
+    axs[1].set_ylabel(r'$y$', fontsize=18)
+    axs[1].set_title(r'$\mathbf{(b)}$ Estimated on base model inputs')
     axs[1].legend(ncol=2, loc='upper center')
     axs[1].set_ylim(-4, 4)
     axs[1].set_xlim(ood_lower, ood_upper)
     
     # Plot 4: Comparison of noise predictions (bottom right)
     axs[2].plot(x_plot, true_noise, 'k-', label='Ground Truth Noise (σ)')
-    axs[2].plot(x_plot, bayescap_sigma, 'g-', label='Bayescap Predicted Noise (σ)')
-    axs[2].plot(x_plot, gaussian_sigma, 'r-', label='Gaussian Predicted Noise (σ)')
-    
+    axs[2].plot(x_plot, bayescap_sigma, linewidth=2, color='#20B2AA', label='Bayescap Predicted Noise (σ)')
     # Pl2egions covered by training data
     axs[2].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[2].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
+    axs[2].plot(x_plot, gaussian_sigma, linewidth=2, color='#8a2be2', label='Gaussian Predicted Noise (σ)')
     
-    axs[2].set_xlabel('x')
-    axs[2].set_ylabel('Standard Deviation (σ)')
-    axs[2].set_title('Uncertainty prediction comparison vs. ground truth')
+    axs[2].set_xlabel(r'$x$', fontsize=18)
+    axs[2].set_ylabel(r'Standard Deviation ($\sigma$)', fontsize=18)
+    axs[2].set_title(r'$\mathbf{(c)}$ Uncertainty prediction comparison vs. ground truth')
     axs[2].set_ylim(-0.1, 2.)
     axs[2].set_xlim(ood_lower, ood_upper)
     axs[2].legend(ncol=2, loc='upper center')
