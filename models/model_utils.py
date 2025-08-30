@@ -40,6 +40,8 @@ def create_scheduler(scheduler_type, optimizer, scheduler_params):
         return optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_params)
     elif scheduler_type == 'ReduceLROnPlateau':
         return optim.lr_scheduler.ReduceLROnPlateau(optimizer, **scheduler_params)
+    elif scheduler_type == 'CosineAnnealingWarmRestarts':
+        return optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_params)
     else:
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
 
