@@ -10,6 +10,7 @@ from pathlib import Path
 # Add parent directory to path to access modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from models.post_hoc_frameworks import IOCUE, BayesCap
 from models.post_hoc_laplace_model import PostHocLaplace
 from networks.simple_regression_model import SimpleRegressionModel
 from dataloaders.uci_datasets import UCIDatasets
@@ -112,11 +113,10 @@ def main():
         'activation': nn.Tanh,
     }
     
-    bayescap_posthoc_ensemble = PostHocEnsemble(
+    bayescap_posthoc_ensemble = BayesCap(
         mean_ensemble=mse_base_ensemble,
         model_class=SimpleRegressionModel,
         model_params=bayescap_posthoc_model_params,
-        infer=predict_bayescap,
         n_models=1,
         device=device
     )
@@ -131,11 +131,10 @@ def main():
         'activation': nn.Tanh,
     }
     
-    gaussian_posthoc_ensemble = PostHocEnsemble(
+    gaussian_posthoc_ensemble = IOCUE(
         mean_ensemble=mse_base_ensemble,
         model_class=SimpleRegressionModel,
         model_params=gaussian_posthoc_model_params,
-        infer=post_hoc_predict_gaussian,
         n_models=1,
         device=device
     )
@@ -199,7 +198,6 @@ def main():
         optimizer_params=optimizer_params,
         scheduler_type='CosineAnnealingLR',
         scheduler_params={'T_max': n_epochs},
-        criterion=bayescap_loss,
         eval_freq=args.eval_freq,
     )
     
@@ -215,7 +213,6 @@ def main():
         optimizer_params={'lr': 1e-4, 'weight_decay': 1e-1},
         scheduler_type='CosineAnnealingLR',
         scheduler_params={'T_max': n_epochs},
-        criterion=gaussian_nll_detached,
         eval_freq=args.eval_freq
     )
 
@@ -255,7 +252,7 @@ def main():
     gaussian_preds = gaussian_base_ensemble.predict(X_test_tensor)
     
     # For BayesCap, only pass the mean prediction since it's specialized for that
-    bayescap_preds = bayescap_posthoc_ensemble.predict(mse_preds['mean'])
+    bayescap_preds = bayescap_posthoc_ensemble.predict(y_pred=mse_preds['mean'])
     
     # For Gaussian post-hoc, pass both X and the mean prediction from MSE base
     gaussian_posthoc_preds = gaussian_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
