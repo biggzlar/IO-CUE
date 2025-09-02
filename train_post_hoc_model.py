@@ -46,36 +46,15 @@ if __name__ == "__main__":
     # Setup results directory
     model_dir, results_dir = setup_result_directories(config_name)
     
-    # Create mean ensemble
-    mean_ensemble = config['mean_model']
-    
     # Create variance ensemble
     sigma_ensemble = config['variance_model']
     
     if not args.visualize_only:
         print("Training models...")
-        # Get mean training parameters
-        mean_criterion = config['mean_criterion']
 
-        # Load existing base model or train new one as needed
-        try:
-            mean_ensemble.load(mean_ensemble_path)
-            print(f"Loaded mean ensemble from {mean_ensemble_path}")
-        except Exception as e:
-            print(f"Error loading mean ensemble from {model_dir}/base_ensemble_model_60.pth: {e}")
-            mean_ensemble.optimize(
-                results_dir=results_dir,
-                model_dir=model_dir,
-                train_loader=train_loader,
-                test_loader=test_loader,
-                n_epochs=n_epochs,
-                optimizer_type=config['mean_optimizer_type'],
-                optimizer_params=config['mean_optimizer_params'],
-                scheduler_type=config['mean_scheduler_type'],
-                scheduler_params=config['mean_scheduler_params'],
-                criterion=mean_criterion,
-                eval_freq=eval_freq
-            )
+        # Load existing base model
+        sigma_ensemble.mean_ensemble.load(mean_ensemble_path)
+        print(f"Loaded mean ensemble from {mean_ensemble_path}")
     
         # Get variance training parameters
         # Train the variance ensemble with explicit parameters
@@ -95,7 +74,7 @@ if __name__ == "__main__":
     
         # Final evaluation
         print("\nFinal evaluation on test set:")
-        results = mean_ensemble.evaluate(test_loader)
+        results = sigma_ensemble.mean_ensemble.evaluate(test_loader)
         print(f"Mean Ensemble - Test RMSE: {results['rmse']:.4f}, Test NLL: {results['nll']:.4f}")
         
         results = sigma_ensemble.evaluate(test_loader)
@@ -105,7 +84,7 @@ if __name__ == "__main__":
         os.makedirs(model_dir, exist_ok=True)
         
         # Save mean ensemble
-        mean_ensemble.save(f"{model_dir}/mean_ensemble.pt")
+        sigma_ensemble.mean_ensemble.save(f"{model_dir}/mean_ensemble.pt")
         print(f"Saved mean ensemble to {model_dir}/mean_ensemble.pt")
         
         # Save variance ensemble
@@ -115,7 +94,7 @@ if __name__ == "__main__":
         # Try to load pre-trained models if available
         if os.path.exists(mean_ensemble_path):
             print(f"Loading mean ensemble from {mean_ensemble_path}")
-            mean_ensemble.load(mean_ensemble_path)
+            sigma_ensemble.mean_ensemble.load(mean_ensemble_path)
         else:
             print("No pre-trained mean ensemble found. Visualizations will use untrained models.")
             
