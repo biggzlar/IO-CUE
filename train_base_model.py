@@ -65,6 +65,7 @@ SCHEDULER_PARAMS = {
 }
 
 # Loss function
+PREDICTOR = predict_mse
 CRITERION = edge_aware_mse_loss
 
 def main():
@@ -91,7 +92,7 @@ def main():
         model_params=MODEL_PARAMS,
         n_models=N_MODELS,
         device=DEVICE,
-        infer=predict_mse
+        infer=PREDICTOR
     )
     
     # Train model
