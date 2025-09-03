@@ -164,9 +164,9 @@ class PostHocEnsemble(nn.Module):
                 if len(batch_X.shape) == 4:
                     visualize_results(results, num_samples=5, metric_name="nll", path=f"{results_dir}", suffix=f"_{epoch}")
                 
-                if self.overfit_counter > 8:
-                    self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
-                    break
+                # if self.overfit_counter > 8:
+                #     self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
+                #     break
 
                 print()
                     
@@ -224,9 +224,8 @@ class PostHocEnsemble(nn.Module):
         all_targets = torch.vstack(all_targets)
         all_errors = torch.concat(all_errors)
         
-        # Calculate RMSE
-        mse = all_errors
-        rmse = torch.sqrt(mse)
+        # Calculate global RMSE across all samples and elements
+        rmse_global = torch.sqrt(torch.mean((all_base_means - all_targets) ** 2))
 
         # Calculate NLL using predicted variances
         nll = gaussian_nll(torch.cat([all_base_means, all_post_hoc_log_sigmas], dim=1), all_targets, reduce=False)
@@ -238,7 +237,7 @@ class PostHocEnsemble(nn.Module):
         # print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
         metrics = {
             'nll': nll.mean().detach().cpu(),
-            'rmse': rmse.mean().detach().cpu(),
+            'rmse': rmse_global.detach().cpu(),
             'avg_var': torch.exp(post_hoc_log_sigma).mean().detach().cpu(),
             'empirical_confidence_levels': empirical_confidence_levels,
             'ece': ece,
@@ -254,7 +253,7 @@ class PostHocEnsemble(nn.Module):
             'mu_batch': base_mean[-5:, ...].detach().cpu(),
             'sigma_batch': torch.exp(post_hoc_log_sigma[-5:, ...]).detach().cpu(),
             'nll_batch': nll[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
-            'rmse_batch': rmse[-5:, ...].detach().cpu(),
+            'rmse_batch': torch.sqrt(error_batch)[-5:, ...].detach().cpu(),
             'avg_var_batch': torch.exp(post_hoc_log_sigma)[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
             
             'all_sigmas': torch.exp(all_post_hoc_log_sigmas),

@@ -167,15 +167,15 @@ class BaseEnsemble(nn.Module):
 
                 if test_nll < self.min_nll:
                     self.min_nll = test_nll
-                    self.save(f"{model_dir}/base_ensemble_model_best.pt")
+                    self.save(f"{model_dir}/base_ensemble_best.pth")
                     self.overfit_counter = 0
                 else:
                     self.overfit_counter += 1
 
-                if self.overfit_counter > 8:
-                    print(f"Overfitting detected at epoch {epoch + 1}, loading best model")
-                    self.load(f"{model_dir}/base_ensemble_model_best.pt")
-                    break
+                # if self.overfit_counter > 8:
+                #     print(f"Overfitting detected at epoch {epoch + 1}, loading best model")
+                #     self.load(f"{model_dir}/base_ensemble_model_best.pt")
+                #     break
         
         pbar.close()
     
