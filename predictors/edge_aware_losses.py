@@ -46,7 +46,7 @@ def edge_aware_mse_loss(y_pred, y_true, edge_weight=1.0, reduce=True):
     
     # Combine losses
     # Squeeze messes up shape but leads to better results
-    total_loss = mse + edge_weight * edge_loss.squeeze(1)
+    total_loss = mse + edge_weight * edge_loss
     
     return total_loss.mean() if reduce else total_loss
 
