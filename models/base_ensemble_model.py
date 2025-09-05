@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataloaders.dataset_utils import create_bootstrapped_dataloaders
 from tqdm import tqdm
+from evaluation.metrics import compute_ece, compute_euc, compute_crps
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
 
 from predictors.gaussian import gaussian_nll
@@ -145,9 +146,7 @@ class BaseEnsemble(nn.Module):
             # Evaluate on test set if requested
             if test_loader is not None and epoch % eval_freq == 0:
                 results = self.evaluate(test_loader)
-                test_rmse = results['rmse']
-                test_nll = results['nll']
-                print(f"\nEpoch {epoch+1}/{n_epochs} - Test RMSE: {test_rmse:.4f}, Test NLL: {test_nll:.4f}")
+                print(f"\nEpoch {epoch+1}/{n_epochs} - Test RMSE: {results['rmse']:.4f}, Test NLL: {results['nll']:.4f}, ECE: {results['ece']:.4f}, EUC: {results['euc']:.4f}, CRPS: {results['crps']:.4f}")
 
                 if len(batch_X.shape) == 4:
                     n_samples = 10
@@ -165,8 +164,8 @@ class BaseEnsemble(nn.Module):
                     plt.savefig(f"{results_dir}/base_ensemble_model_{epoch + 1}.png")
                     plt.close()
 
-                if test_nll < self.min_nll:
-                    self.min_nll = test_nll
+                if results['nll'] < self.min_nll:
+                    self.min_nll = results['nll']
                     self.save(f"{model_dir}/base_ensemble_best.pth")
                     self.overfit_counter = 0
                 else:
@@ -231,9 +230,17 @@ class BaseEnsemble(nn.Module):
 
         nll = gaussian_nll(y_pred=torch.cat([all_means, all_mean_total_sigmas], dim=1), y_true=all_targets, reduce=True)
 
+        residuals = torch.abs(all_means - all_targets)
+        ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=torch.exp(all_mean_total_sigmas))
+        euc, p_value = compute_euc(predictions=all_means, uncertainties=torch.exp(all_mean_total_sigmas), targets=all_targets)
+        crps = compute_crps(predictions=all_means, uncertainties=torch.exp(all_mean_total_sigmas), targets=all_targets)
+
         results = { 
             'rmse': rmse,
-            'nll': nll,
+            'nll': nll.item(),
+            'ece': ece.item(),
+            'euc': euc.item(),
+            'crps': crps.mean().detach().cpu(),
             'all_means': all_means,
             'all_targets': all_targets,
             'all_inputs': all_inputs
