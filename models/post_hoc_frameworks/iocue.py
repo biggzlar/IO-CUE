@@ -22,7 +22,7 @@ class IOCUE(PostHocEnsemble):
     
     def _predict(self, X, y_pred=None, idx=None):
         inputs = torch.concat([X, y_pred], dim=1)
-        if idx:
+        if idx is not None:
             return self.models[idx](inputs)
         else:
             return torch.stack([model(inputs) for model in self.models], dim=0)
