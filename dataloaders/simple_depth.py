@@ -16,24 +16,31 @@ def load_depth():
 
 def split_data(data, train_split):
     X, y = data
-    
-    # Load data into memory (NOTE: this takes a lot of memory)
-    X = X[:]
-    y = y[:]
-
-    # Shuffle data before slicing
-    random.seed(42)
-    random.shuffle(X)
-    random.seed(42)
-    random.shuffle(y)
-
-    # Slice
     X_ = X[:train_split]
     y_ = y[:train_split]
     return (X_, y_)
 
+# def split_data(data, train_split):
+#     X, y = data
+    
+#     # Load data into memory (NOTE: this takes a lot of memory)
+#     X = X[:]
+#     y = y[:]
+
+#     # Shuffle data before slicing
+#     random.seed(42)
+#     random.shuffle(X)
+#     random.seed(42)
+#     random.shuffle(y)
+
+#     # Slice
+#     X_ = X[:train_split]
+#     y_ = y[:train_split]
+#     return (X_, y_)
+
 class DepthDataset:
-    def __init__(self, path=None, img_size=None, augment=True, train_split=1.0, flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False):
+    def __init__(self, path=None, img_size=None, augment=True, train_split=1.0, 
+                 flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False):
         self.augment = augment
         self.flip = flip
         self.colorjitter = colorjitter
@@ -59,11 +66,7 @@ class DepthDataset:
                 gaussianblur=self.gaussianblur, grayscale=self.grayscale,
                 gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob
             )
-            self.test = _DepthDataset(test_data, img_size=self.img_size, augment=self.augment, 
-                flip=self.flip, colorjitter=self.colorjitter, 
-                gaussianblur=self.gaussianblur, grayscale=self.grayscale,
-                gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob
-            )
+            self.test = _DepthDataset(test_data, img_size=self.img_size, augment=False)
         else:
             data = load_depth_path(self.path)
             self.train = None
@@ -81,7 +84,8 @@ class DepthDataset:
     
 
 class _DepthDataset(Dataset):
-    def __init__(self, data, img_size=None, augment=False, flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False, flip_prob=0):
+    def __init__(self, data, img_size=None, augment=False, 
+                 flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False, flip_prob=0):
         self.data = data
         self.augment = augment
         self.flip = flip
