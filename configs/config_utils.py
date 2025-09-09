@@ -15,6 +15,7 @@ from predictors.edge_aware_losses import edge_aware_gaussian_nll_loss_detached, 
 from predictors.mse import predict_mse, rmse
 from predictors.bayescap import predict_bayescap, bayescap_loss
 from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian, gen_gaussian_nll
+from predictors.evidential import post_hoc_predict_NIG, NIG_NLL_DETACHED
 
 from models import BaseEnsemble
 from models.post_hoc_frameworks import IOCUE, BayesCap
@@ -67,11 +68,11 @@ def resolve_config_references(config, device):
     resolved_config = config.copy()
     
     # Resolve model classes
-    # For backward compatibility, check both model_class and mean_model_class
-    if 'model_class' in config:
-        model_class_name = config['model_class']
-        resolved_config['mean_model_class'] = resolve_model_class(model_class_name)
-        resolved_config['variance_model_class'] = resolve_model_class(model_class_name)
+    # # For backward compatibility, check both model_class and mean_model_class
+    # if 'model_class' in config:
+    #     model_class_name = config['model_class']
+    #     resolved_config['mean_model_class'] = resolve_model_class(model_class_name)
+    #     resolved_config['variance_model_class'] = resolve_model_class(model_class_name)
     
     # If separate model classes are specified, they take precedence
     if 'mean_model_class' in config:
@@ -81,16 +82,26 @@ def resolve_config_references(config, device):
     if 'variance_model_class' in config:
         model_class_name = config['variance_model_class']
         resolved_config['variance_model_class'] = resolve_model_class(model_class_name)
+
+    # Resolve variance predictor
+    if 'variance_predictor' in config:
+        predictor_name = config['variance_predictor']
+        resolved_config['variance_predictor'] = resolve_predictor(predictor_name)
+
+    # Resolve variance criterion
+    if 'variance_criterion' in config:
+        criterion_name = config['variance_criterion']
+        resolved_config['variance_criterion'] = resolve_criterion(criterion_name)
     
     # Resolve predictor
     if 'mean_predictor' in config:
         predictor_name = config['mean_predictor']
         resolved_config['mean_predictor'] = resolve_predictor(predictor_name)
 
-    # Resolve criterion for mean model
-    if 'mean_criterion' in config:
-        criterion_name = config['mean_criterion']
-        resolved_config['mean_criterion'] = resolve_criterion(criterion_name)
+    # # Resolve criterion for mean model
+    # if 'mean_criterion' in config:
+    #     criterion_name = config['mean_criterion']
+    #     resolved_config['mean_criterion'] = resolve_criterion(criterion_name)
     
     # Generate dataloaders from dataset attributes if present
     if 'dataset_attrs' in config:
@@ -101,14 +112,14 @@ def resolve_config_references(config, device):
     if 'device' not in resolved_config:
         resolved_config['device'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Handle scheduler configurations
-    # For mean scheduler
-    if 'mean_scheduler_type' in config:
-        if config['mean_scheduler_type'] is None:
-            resolved_config['mean_scheduler_type'] = None
-            resolved_config['mean_scheduler_params'] = None
-        elif 'mean_scheduler_params' in config:
-            resolved_config['mean_scheduler_params']['T_max'] = config['n_epochs']
+    # # Handle scheduler configurations
+    # # For mean scheduler
+    # if 'mean_scheduler_type' in config:
+    #     if config['mean_scheduler_type'] is None:
+    #         resolved_config['mean_scheduler_type'] = None
+    #         resolved_config['mean_scheduler_params'] = None
+    #     elif 'mean_scheduler_params' in config:
+    #         resolved_config['mean_scheduler_params']['T_max'] = config['n_epochs']
     
     # For variance scheduler
     if 'variance_scheduler_type' in config:
@@ -135,6 +146,8 @@ def resolve_config_references(config, device):
         model_params=resolved_config['variance_model_params'],
         n_models=resolved_config['n_variance_models'], 
         device=device,
+        infer=resolved_config['variance_predictor'],
+        loss=resolved_config['variance_criterion']
     )
     
     return resolved_config
@@ -168,6 +181,8 @@ def resolve_predictor(predictor_name):
         return predict_bayescap
     elif predictor_name == "post_hoc_predict_gen_gaussian":
         return post_hoc_predict_gen_gaussian
+    elif predictor_name == "post_hoc_predict_NIG":
+        return post_hoc_predict_NIG
     else:
         raise ValueError(f"Unknown predictor: {predictor_name}")
 
@@ -247,7 +262,7 @@ def resolve_criterion(criterion_name):
         return gaussian_nll
     elif criterion_name == "L1Loss":
         return nn.L1Loss()
-    elif criterion_name == "gaussian_nll_loss_detached":
+    elif criterion_name == "gaussian_nll_detached":
         return gaussian_nll_detached
     elif criterion_name == "rmse_loss":
         return rmse
@@ -261,6 +276,10 @@ def resolve_criterion(criterion_name):
         return bayescap_loss
     elif criterion_name == "gen_gaussian_nll":
         return gen_gaussian_nll
+    elif criterion_name == "NIG_NLL":
+        return NIG_NLL
+    elif criterion_name == "NIG_NLL_DETACHED":
+        return NIG_NLL_DETACHED
     else:
         raise ValueError(f"Unknown criterion: {criterion_name}")
 

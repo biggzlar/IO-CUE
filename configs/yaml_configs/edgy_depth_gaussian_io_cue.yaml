@@ -3,16 +3,16 @@
 # Training setup
 n_ensemble_models: 5
 n_variance_models: 1
-n_epochs: 64
-eval_freq: 5
+n_epochs: 128
+eval_freq: 2
 batch_size: 32
-pair_models: false
+pair_models: False
 
 # Dataset configuration
 dataset_name: simple_depth
 dataset_attrs:
   dataset_path: null  # Will use default path in DepthDataset
-  shuffle: true
+  shuffle: True
   noise_level: 0.1
   train_split: 0.1
   augment: false
@@ -33,22 +33,25 @@ mean_model_params:
   out_channels: [1]
   drop_prob: 0.2
 
-# Mean model training parameters
-mean_optimizer_type: Adam
-mean_optimizer_params:
-  lr: 5.0e-5
-  weight_decay: 1.0e-5
-mean_scheduler_type: null
-mean_scheduler_params: null
+# # Mean model training parameters
+# mean_optimizer_type: Adam
+# mean_optimizer_params:
+#   lr: 5.0e-5
+#   weight_decay: 1.0e-5
+# mean_scheduler_type: null
+# mean_scheduler_params: null
 mean_predictor: predict_mse
-mean_criterion: edge_aware_mse_loss
+# mean_criterion: edge_aware_mse_loss
 
 # Variance model parameters
 variance_framework: iocue
 variance_model_params:
   in_channels: 4
   out_channels: [1]
-  drop_prob: 0.3
+  drop_prob: 0.2
+
+variance_predictor: post_hoc_predict_gaussian
+variance_criterion: gaussian_nll_detached
 
 # Variance model training parameters
 variance_optimizer_type: AdamW
