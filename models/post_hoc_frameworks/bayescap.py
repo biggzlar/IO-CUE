@@ -5,19 +5,22 @@ from predictors.bayescap import predict_bayescap, bayescap_loss
 from models.post_hoc_ensemble_model import PostHocEnsemble
 
 class BayesCap(PostHocEnsemble):
-    def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None):
+    def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None, infer=predict_bayescap, loss=bayescap_loss):
         """
         Ensemble of variance prediction models for post-hoc uncertainty estimation
         
         Args:
+            mean_ensemble: The mean ensemble model
             model_class: The model class to use for the ensemble
             model_params: Dictionary of parameters to pass to the model constructor
             n_models: Number of models in the ensemble
             device: Device to run the models on
+            infer: Inference function for post-processing model outputs
+            loss: Loss function for training
         """
         super(BayesCap, self).__init__(mean_ensemble, model_class, model_params, n_models, device)
-        self.infer = predict_bayescap
-        self.loss  = bayescap_loss
+        self.infer = infer
+        self.loss  = loss
 
     
     def _predict(self, X=None, y_pred=None, idx=None):

@@ -40,8 +40,8 @@ mean_model_params:
 #   weight_decay: 1.0e-5
 # mean_scheduler_type: null
 # mean_scheduler_params: null
-mean_predictor: predict_mse
-# mean_criterion: edge_aware_mse_loss
+mean_predictor: pred_mse
+# mean_criterion: crit_edge_aware_mse
 
 # Variance model parameters
 variance_framework: iocue
@@ -50,8 +50,8 @@ variance_model_params:
   out_channels: [1]
   drop_prob: 0.2
 
-variance_predictor: post_hoc_predict_gaussian
-variance_criterion: gaussian_nll_detached
+variance_predictor: pred_gaussian_posthoc
+variance_criterion: crit_gaussian_detached
 
 # Variance model training parameters
 variance_optimizer_type: AdamW

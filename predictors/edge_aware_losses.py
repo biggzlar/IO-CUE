@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+from .registry import register_criterion
 
 def _compute_gradient(x):
     """Compute gradients in x and y directions."""
@@ -21,6 +22,7 @@ def _compute_gradient(x):
     
     return grad_x, grad_y
 
+@register_criterion("crit_edge_aware_mse")
 def edge_aware_mse_loss(y_pred, y_true, edge_weight=1.0, reduce=True):
     """
     MSE loss with an additional term to encourage sharper edges.
@@ -50,6 +52,7 @@ def edge_aware_mse_loss(y_pred, y_true, edge_weight=1.0, reduce=True):
     
     return total_loss.mean() if reduce else total_loss
 
+@register_criterion("crit_edge_aware_gaussian")
 def edge_aware_gaussian_nll_loss(y_pred, y_true, edge_weight=1.0, reduce=True):
     """
     Gaussian NLL loss with an additional term to encourage sharper edges.
@@ -81,6 +84,7 @@ def edge_aware_gaussian_nll_loss(y_pred, y_true, edge_weight=1.0, reduce=True):
     return total_loss.mean() if reduce else total_loss
 
 
+@register_criterion("crit_edge_aware_gaussian_detached")
 def edge_aware_gaussian_nll_loss_detached(y_pred, y_true, params, edge_weight=1e-1, reduce=True, **kwargs):
     """
     Gaussian NLL loss with an additional term to encourage sharper edges.

@@ -10,12 +10,7 @@ import yaml
 from networks.simple_regression_model import SimpleRegressionModel
 from networks.unet_model import UNet
 from dataloaders.simple_depth import DepthDataset
-from predictors.gaussian import post_hoc_predict_gaussian, gaussian_nll, gaussian_nll_detached, predict_gaussian
-from predictors.edge_aware_losses import edge_aware_gaussian_nll_loss_detached, edge_aware_mse_loss, edge_aware_gaussian_nll_loss
-from predictors.mse import predict_mse, rmse
-from predictors.bayescap import predict_bayescap, bayescap_loss
-from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian, gen_gaussian_nll
-from predictors.evidential import post_hoc_predict_NIG, NIG_NLL_DETACHED
+# Imports removed - now using registry system
 
 from models import BaseEnsemble
 from models.post_hoc_frameworks import IOCUE, BayesCap
@@ -66,14 +61,7 @@ def resolve_config_references(config, device):
     """
     # Create a copy of the config to avoid modifying the original
     resolved_config = config.copy()
-    
-    # Resolve model classes
-    # # For backward compatibility, check both model_class and mean_model_class
-    # if 'model_class' in config:
-    #     model_class_name = config['model_class']
-    #     resolved_config['mean_model_class'] = resolve_model_class(model_class_name)
-    #     resolved_config['variance_model_class'] = resolve_model_class(model_class_name)
-    
+
     # If separate model classes are specified, they take precedence
     if 'mean_model_class' in config:
         model_class_name = config['mean_model_class']
@@ -97,11 +85,6 @@ def resolve_config_references(config, device):
     if 'mean_predictor' in config:
         predictor_name = config['mean_predictor']
         resolved_config['mean_predictor'] = resolve_predictor(predictor_name)
-
-    # # Resolve criterion for mean model
-    # if 'mean_criterion' in config:
-    #     criterion_name = config['mean_criterion']
-    #     resolved_config['mean_criterion'] = resolve_criterion(criterion_name)
     
     # Generate dataloaders from dataset attributes if present
     if 'dataset_attrs' in config:
@@ -111,15 +94,6 @@ def resolve_config_references(config, device):
     # Add device
     if 'device' not in resolved_config:
         resolved_config['device'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # # Handle scheduler configurations
-    # # For mean scheduler
-    # if 'mean_scheduler_type' in config:
-    #     if config['mean_scheduler_type'] is None:
-    #         resolved_config['mean_scheduler_type'] = None
-    #         resolved_config['mean_scheduler_params'] = None
-    #     elif 'mean_scheduler_params' in config:
-    #         resolved_config['mean_scheduler_params']['T_max'] = config['n_epochs']
     
     # For variance scheduler
     if 'variance_scheduler_type' in config:
@@ -163,7 +137,7 @@ def resolve_framework(variance_framework_name):
 
 def resolve_predictor(predictor_name):
     """
-    Resolve predictor from string name.
+    Resolve predictor from string name using registry.
     
     Args:
         predictor_name (str): Name of the predictor
@@ -171,20 +145,13 @@ def resolve_predictor(predictor_name):
     Returns:
         function: Predictor function
     """
-    if predictor_name == "predict_mse":
-        return predict_mse
-    elif predictor_name == "predict_gaussian":
-        return predict_gaussian
-    elif predictor_name == "post_hoc_predict_gaussian":
-        return post_hoc_predict_gaussian
-    elif predictor_name == "predict_bayescap":
-        return predict_bayescap
-    elif predictor_name == "post_hoc_predict_gen_gaussian":
-        return post_hoc_predict_gen_gaussian
-    elif predictor_name == "post_hoc_predict_NIG":
-        return post_hoc_predict_NIG
-    else:
-        raise ValueError(f"Unknown predictor: {predictor_name}")
+    from predictors.registry import PREDICTOR_REGISTRY
+    
+    if predictor_name not in PREDICTOR_REGISTRY:
+        available = list(PREDICTOR_REGISTRY.keys())
+        raise ValueError(f"Unknown predictor: {predictor_name}. Available predictors: {available}")
+    
+    return PREDICTOR_REGISTRY[predictor_name]
 
 def resolve_dataset(dataset_name, dataset_attrs, batch_size):
     """
@@ -248,7 +215,7 @@ def resolve_model_class(model_class_name):
 
 def resolve_criterion(criterion_name):
     """
-    Resolve loss function from string name.
+    Resolve loss function from string name using registry.
     
     Args:
         criterion_name (str): Name of the criterion
@@ -256,32 +223,19 @@ def resolve_criterion(criterion_name):
     Returns:
         function: Loss function
     """
+    from predictors.registry import CRITERION_REGISTRY
+    
+    # Handle special cases for PyTorch built-in losses
     if criterion_name == "MSELoss":
         return nn.MSELoss()
-    elif criterion_name == "gaussian_nll_loss":
-        return gaussian_nll
     elif criterion_name == "L1Loss":
         return nn.L1Loss()
-    elif criterion_name == "gaussian_nll_detached":
-        return gaussian_nll_detached
-    elif criterion_name == "rmse_loss":
-        return rmse
-    elif criterion_name == "edge_aware_mse_loss":
-        return edge_aware_mse_loss
-    elif criterion_name == "edge_aware_gaussian_nll_loss":
-        return edge_aware_gaussian_nll_loss
-    elif criterion_name == "edge_aware_gaussian_nll_loss_detached":
-        return edge_aware_gaussian_nll_loss_detached
-    elif criterion_name == "bayescap_loss":
-        return bayescap_loss
-    elif criterion_name == "gen_gaussian_nll":
-        return gen_gaussian_nll
-    elif criterion_name == "NIG_NLL":
-        return NIG_NLL
-    elif criterion_name == "NIG_NLL_DETACHED":
-        return NIG_NLL_DETACHED
-    else:
-        raise ValueError(f"Unknown criterion: {criterion_name}")
+    
+    if criterion_name not in CRITERION_REGISTRY:
+        available = list(CRITERION_REGISTRY.keys())
+        raise ValueError(f"Unknown criterion: {criterion_name}. Available criteria: {available}")
+    
+    return CRITERION_REGISTRY[criterion_name]
 
 def get_random_id(length=6):
     """

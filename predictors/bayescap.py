@@ -1,7 +1,9 @@
 import torch
 import torch.nn.functional as F
+from .registry import register_predictor, register_criterion
 
 # Adapter function to work directly with outputs
+@register_predictor("pred_bayescap")
 def predict_bayescap(params):
     # Extract parameters from outputs
     mu_tilde, one_over_alpha, beta = torch.split(params, 1, dim=1)
@@ -23,6 +25,7 @@ def predict_bayescap(params):
             "beta": beta}
 
 
+@register_criterion("crit_bayescap")
 def bayescap_loss(y_true, y_pred, params, **kwargs):
     mu_tilde, one_over_alpha, beta = torch.split(params, 1, dim=1)
     one_over_alpha = F.softplus(one_over_alpha) + 1e-8

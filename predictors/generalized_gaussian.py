@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
+from .registry import register_predictor, register_criterion
 
+@register_predictor("pred_gen_gaussian")
 def predict_gen_gaussian(x, net):
     outs = [out.detach() for out in net(x)]
     alpha_map = torch.pow(outs[0] + 1e-8, -1)
@@ -11,6 +13,7 @@ def predict_gen_gaussian(x, net):
 
     return {"alpha": alpha_map, "beta": beta_map, "variance": variance, "sigma": sigma}
 
+@register_criterion("crit_gen_gaussian")
 def gen_gaussian_nll(y_true, y_pred, params, **kwargs):
     one_over_alpha, beta = torch.split(params, 1, dim=1)
     one_over_alpha = F.softplus(one_over_alpha) + 1e-8
@@ -20,6 +23,7 @@ def gen_gaussian_nll(y_true, y_pred, params, **kwargs):
     nll = residual - torch.log(one_over_alpha) - torch.log(beta) + torch.lgamma(torch.pow(beta, -1))
     return nll.mean()
 
+@register_predictor("pred_gen_gaussian_posthoc")
 def post_hoc_predict_gen_gaussian(preds):
     one_over_alpha, beta = torch.split(preds, 1, dim=1)
     one_over_alpha = F.softplus(one_over_alpha) + 1e-8

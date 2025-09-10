@@ -40,8 +40,8 @@ mean_optimizer_params:
   weight_decay: 1.0e-5
 mean_scheduler_type: null
 mean_scheduler_params: null
-mean_predictor: predict_mse
-mean_criterion: edge_aware_mse_loss
+mean_predictor: pred_mse
+mean_criterion: crit_edge_aware_mse
 
 # Variance model parameters
 variance_framework: bayescap
@@ -49,6 +49,9 @@ variance_model_params:
   in_channels: 1
   out_channels: [1, 1, 1]
   drop_prob: 0.3
+
+variance_predictor: pred_bayescap
+variance_criterion: crit_bayescap
 
 # Variance model training parameters
 variance_optimizer_type: AdamW
