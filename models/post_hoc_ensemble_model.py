@@ -259,49 +259,6 @@ class PostHocEnsemble(nn.Module):
             'all_sigmas': torch.exp(all_post_hoc_log_sigmas),
             'metrics': metrics,
         }
-    
-    def predict(self, X, y_pred=None):
-        """
-        Generate variance predictions from all models in the ensemble
-        
-        Args:
-            X: Input features
-            y_pred: Ensemble predictions (mean) - not used with new architecture
-            return_individual: Whether to return individual model predictions
-        
-        Returns:
-            mean_variance: Mean of variance predictions
-            std_variance: Standard deviation of variance predictions
-            all_variances: (Optional) Individual model predictions if return_individual=True
-        """
-        # Convert input to tensor if it's a numpy array
-        if isinstance(X, np.ndarray):
-            X = torch.FloatTensor(X).to(self.device)
-        
-        # Set models to evaluation mode
-        for model in self.models:
-            model.eval()
-        
-        # Get predictions from each model
-        with torch.no_grad():
-            if self.model_params['in_channels'] == X.shape[1] + 1:
-                params_preds = [self.infer(model(torch.concat([X, y_pred], dim=1))) for model in self.models]
-            else:
-                params_preds = [self.infer(model(X)) for model in self.models]
-            sigma_preds = [pred['sigma'] for pred in params_preds]
-        
-        # Stack predictions
-        all_sigmas = torch.stack(sigma_preds, dim=0)
-
-        # Compute mean and std of variances
-        mean_sigma = torch.mean(all_sigmas, dim=0)
-        mean_log_sigma = torch.log(mean_sigma)
-        var_of_var = torch.var(all_sigmas.square(), dim=0) if self.n_models > 1 else torch.zeros_like(mean_log_sigma)
-        
-        return {'sigma': mean_sigma, 
-                'mean_log_sigma': mean_log_sigma, 
-                'var_of_var': var_of_var
-        }
             
     def save(self, path):
         """
