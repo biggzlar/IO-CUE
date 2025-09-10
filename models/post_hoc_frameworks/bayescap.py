@@ -56,16 +56,21 @@ class BayesCap(PostHocEnsemble):
         with torch.no_grad():
             params_preds = [self.infer(model(y_pred)) for model in self.models]
             sigma_preds = [pred['sigma'] for pred in params_preds]
+            # Get raw model outputs for loss computation (3 channels: mu_tilde, one_over_alpha, beta)
+            raw_params = [model(y_pred) for model in self.models]
         
         # Stack predictions
         all_sigmas = torch.stack(sigma_preds, dim=0)
+        all_params = torch.stack(raw_params, dim=0)
 
         # Compute mean and std of variances
         mean_sigma = torch.mean(all_sigmas, dim=0)
         mean_log_sigma = torch.log(mean_sigma)
         var_of_var = torch.var(all_sigmas.square(), dim=0) if self.n_models > 1 else torch.zeros_like(mean_log_sigma)
+        mean_params = torch.mean(all_params, dim=0)
         
         return {'sigma': mean_sigma, 
                 'mean_log_sigma': mean_log_sigma, 
-                'var_of_var': var_of_var
+                'var_of_var': var_of_var,
+                'params': mean_params
         }

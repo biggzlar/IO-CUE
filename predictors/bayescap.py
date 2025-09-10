@@ -22,7 +22,8 @@ def predict_bayescap(params):
             "sigma": sigma, 
             "log_sigma": log_sigma,
             "alpha": alpha, 
-            "beta": beta}
+            "beta": beta,
+            "params": params}
 
 
 @register_criterion("crit_bayescap")

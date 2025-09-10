@@ -119,7 +119,7 @@ class PostHocEnsemble(nn.Module):
                     # Forward pass for variance model
                     params = self._predict(X=batch_X, y_pred=batch_y_pred, idx=i)
                         
-                    loss = self.loss(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs)
+                    loss = self.loss(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs, reduce=True)
                     
                     # Backward pass
                     loss.backward()
@@ -189,6 +189,7 @@ class PostHocEnsemble(nn.Module):
         all_post_hoc_log_sigmas = []
         all_targets = []
         all_errors = []
+        all_nlls = []
         
         # Set base models to evaluation mode
         for model in self.mean_ensemble.models:
@@ -203,20 +204,25 @@ class PostHocEnsemble(nn.Module):
                 
                 # Mean predictions from mean ensemble
                 batch_preds = self.mean_ensemble.predict(batch_X)
-                base_mean = batch_preds['mean']
+                batch_means = batch_preds['mean']
 
-                all_base_means.append(base_mean)
+                all_base_means.append(batch_means)
                 
                 # Log variance predictions from variance ensemble
-                batch_post_hoc_preds = self.predict(batch_X, y_pred=base_mean)
+                batch_post_hoc_preds = self.predict(batch_X, y_pred=batch_means)
 
-                post_hoc_log_sigma = batch_post_hoc_preds['mean_log_sigma']
+                batch_post_hoc_log_sigma = batch_post_hoc_preds['mean_log_sigma']
                 # Store predictions and targets
-                all_post_hoc_log_sigmas.append(post_hoc_log_sigma)
+                all_post_hoc_log_sigmas.append(batch_post_hoc_log_sigma)
                 all_targets.append(batch_y)
 
-                error_batch = torch.abs(batch_y - base_mean).square().mean(dim=batch_average_indices)
-                all_errors.append(error_batch)
+                # Compute NLL using framework's loss function if available
+                batch_params = batch_post_hoc_preds['params']
+                batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False)
+                all_nlls.append(batch_nll)
+
+                batch_errors = torch.abs(batch_y - batch_means).square().mean(dim=batch_average_indices)
+                all_errors.append(batch_errors)
         
         # Combine predictions and targets
         all_base_means = torch.vstack(all_base_means)
@@ -227,8 +233,8 @@ class PostHocEnsemble(nn.Module):
         # Calculate global RMSE across all samples and elements
         rmse_global = torch.sqrt(torch.mean((all_base_means - all_targets) ** 2))
 
-        # Calculate NLL using predicted variances
-        nll = gaussian_nll(torch.cat([all_base_means, all_post_hoc_log_sigmas], dim=1), all_targets, reduce=False)
+        # Use the NLLs computed in the loop
+        nll = torch.cat(all_nlls, dim=0)
         residuals = torch.abs(all_base_means - all_targets)
         ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=torch.exp(all_post_hoc_log_sigmas))
         euc, p_value = compute_euc(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
@@ -238,7 +244,7 @@ class PostHocEnsemble(nn.Module):
         metrics = {
             'nll': nll.mean().detach().cpu(),
             'rmse': rmse_global.detach().cpu(),
-            'avg_var': torch.exp(post_hoc_log_sigma).mean().detach().cpu(),
+            'avg_var': torch.exp(all_post_hoc_log_sigmas).mean().detach().cpu(),
             'empirical_confidence_levels': empirical_confidence_levels,
             'ece': ece,
             'euc': euc,
@@ -249,12 +255,12 @@ class PostHocEnsemble(nn.Module):
         return {
             'images': batch_X[-5:, ...].detach().cpu(),
             'targets': batch_y[-5:, ...].detach().cpu(),
-            'errors': error_batch[-5:, ...].detach().cpu(),
-            'mu_batch': base_mean[-5:, ...].detach().cpu(),
-            'sigma_batch': torch.exp(post_hoc_log_sigma[-5:, ...]).detach().cpu(),
+            'errors': batch_errors[-5:, ...].detach().cpu(),
+            'mu_batch': batch_means[-5:, ...].detach().cpu(),
+            'sigma_batch': torch.exp(batch_post_hoc_log_sigma[-5:, ...]).detach().cpu(),
             'nll_batch': nll[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
-            'rmse_batch': torch.sqrt(error_batch)[-5:, ...].detach().cpu(),
-            'avg_var_batch': torch.exp(post_hoc_log_sigma)[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
+            'rmse_batch': torch.sqrt(batch_errors)[-5:, ...].detach().cpu(),
+            'avg_var_batch': torch.exp(batch_post_hoc_log_sigma)[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
             
             'all_sigmas': torch.exp(all_post_hoc_log_sigmas),
             'metrics': metrics,

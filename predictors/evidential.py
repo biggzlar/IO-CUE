@@ -46,25 +46,25 @@ def NIG_REG(y_true, gamma, nu, alpha, beta, reduce=False):
 
 @register_criterion("crit_nig_detached")
 def NIG_NLL_DETACHED(y_true, y_pred, params, reduce=False, coeff=1.0, epoch=None, n_epochs=None):
-    nu, alpha, beta = transform_NIG_params(params)
+    nu, alpha, beta = transform_NIG_params(params, split_dim=1)
     gamma = y_pred.detach()
 
     loss_nll = NIG_NLL(y_true, gamma, nu, alpha, beta)
     loss_reg = NIG_REG(y_true, gamma, nu, alpha, beta)
-    loss = torch.mean(loss_nll + coeff * loss_reg)
-    return loss
+    loss = loss_nll + coeff * loss_reg
+    return loss.mean() if reduce else loss
 
 @register_predictor("pred_nig_posthoc")
 def post_hoc_predict_NIG(params):
-    nu, alpha, beta = transform_NIG_params(params)
+    nu, alpha, beta = transform_NIG_params(params, split_dim=1)
 
     sigma = beta * torch.reciprocal((alpha - 1.0))
 
-    return {'sigma': sigma, 'log_sigma': torch.log(sigma), 'nu': nu, 'alpha': alpha, 'beta': beta}
+    return {'sigma': sigma, 'log_sigma': torch.log(sigma), 'params': params}
 
 
-def transform_NIG_params(params):
-    nu, alpha, beta = torch.split(params, 1, dim=1)
+def transform_NIG_params(params, split_dim=1):
+    nu, alpha, beta = torch.split(params, 1, dim=split_dim)
 
     alpha = F.softplus(alpha) + 1.
     beta = F.softplus(beta) + 1e-8

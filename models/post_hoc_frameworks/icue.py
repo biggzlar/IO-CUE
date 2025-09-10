@@ -53,16 +53,21 @@ class ICUE(PostHocEnsemble):
         with torch.no_grad():
             params_preds = [self.infer(model(X)) for model in self.models]
             sigma_preds = [pred['sigma'] for pred in params_preds]
+            # Extract the raw parameters needed for loss computation
+            raw_params = [pred['log_sigma'] for pred in params_preds]
         
         # Stack predictions
         all_sigmas = torch.stack(sigma_preds, dim=0)
+        all_params = torch.stack(raw_params, dim=0)
 
         # Compute mean and std of variances
         mean_sigma = torch.mean(all_sigmas, dim=0)
         mean_log_sigma = torch.log(mean_sigma)
         var_of_var = torch.var(all_sigmas.square(), dim=0) if self.n_models > 1 else torch.zeros_like(mean_log_sigma)
+        mean_params = torch.mean(all_params, dim=0)
         
         return {'sigma': mean_sigma, 
                 'mean_log_sigma': mean_log_sigma, 
-                'var_of_var': var_of_var
+                'var_of_var': var_of_var,
+                'params': mean_params
         }

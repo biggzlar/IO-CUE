@@ -6,6 +6,8 @@ from . import generalized_gaussian
 from . import evidential
 from . import edge_aware_losses
 from . import edgy_gaussian
+from . import laplace
+from . import student_t
 
 # Keep backward compatibility
 from .gaussian import gaussian_nll
