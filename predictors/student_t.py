@@ -77,8 +77,8 @@ def predict_student_t(preds):
     
     return {
         "mean": mean, 
-        "scale": scale, 
-        "log_scale": log_scale,
+        "sigma": scale, 
+        "log_sigma": log_scale,
         "df": df,
         "log_df": log_df,
         "params": torch.cat([log_scale, log_df], dim=1)
@@ -100,8 +100,8 @@ def post_hoc_predict_student_t(preds):
     df = torch.exp(log_df) + 2.0  # Ensure df > 2 for finite variance
     
     return {
-        'scale': scale, 
-        'log_scale': log_scale,
+        'sigma': scale, 
+        'log_sigma': log_scale,
         'df': df,
         'log_df': log_df,
         'params': torch.cat([log_scale, log_df], dim=1)

@@ -18,14 +18,14 @@ def predict_gen_gaussian(x, net):
     return {"alpha": alpha_map, "beta": beta_map, "variance": variance, "sigma": sigma, "params": params}
 
 @register_criterion("crit_gen_gaussian")
-def gen_gaussian_nll(y_true, y_pred, params, **kwargs):
+def gen_gaussian_nll(y_true, y_pred, params, reduce=False, **kwargs):
     one_over_alpha, beta = torch.split(params, 1, dim=1)
     one_over_alpha = F.softplus(one_over_alpha) + 1e-8
     beta = F.softplus(beta) + 1e-8
 
     residual = torch.pow(torch.abs(y_pred - y_true).clamp(1e-4, 1e3) * one_over_alpha, beta)
     nll = residual - torch.log(one_over_alpha) - torch.log(beta) + torch.lgamma(torch.pow(beta, -1))
-    return nll.mean()
+    return nll.mean() if reduce else nll
 
 @register_predictor("pred_gen_gaussian_posthoc")
 def post_hoc_predict_gen_gaussian(params):

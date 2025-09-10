@@ -171,6 +171,7 @@ class PostHocEnsemble(nn.Module):
                 print()
                     
         pbar.close()
+        self.load(f"{model_dir}/post_hoc_ensemble_model_best.pth")
         
 
     def evaluate(self, test_loader):
@@ -186,7 +187,7 @@ class PostHocEnsemble(nn.Module):
             nll: Negative Log-Likelihood
         """
         all_base_means = []
-        all_post_hoc_log_sigmas = []
+        all_post_hoc_sigmas = []
         all_targets = []
         all_errors = []
         all_nlls = []
@@ -211,9 +212,9 @@ class PostHocEnsemble(nn.Module):
                 # Log variance predictions from variance ensemble
                 batch_post_hoc_preds = self.predict(batch_X, y_pred=batch_means)
 
-                batch_post_hoc_log_sigma = batch_post_hoc_preds['mean_log_sigma']
+                batch_post_hoc_sigma = batch_post_hoc_preds['sigma']
                 # Store predictions and targets
-                all_post_hoc_log_sigmas.append(batch_post_hoc_log_sigma)
+                all_post_hoc_sigmas.append(batch_post_hoc_sigma)
                 all_targets.append(batch_y)
 
                 # Compute NLL using framework's loss function if available
@@ -226,7 +227,7 @@ class PostHocEnsemble(nn.Module):
         
         # Combine predictions and targets
         all_base_means = torch.vstack(all_base_means)
-        all_post_hoc_log_sigmas = torch.vstack(all_post_hoc_log_sigmas)
+        all_post_hoc_sigmas = torch.vstack(all_post_hoc_sigmas)
         all_targets = torch.vstack(all_targets)
         all_errors = torch.concat(all_errors)
         
@@ -236,15 +237,15 @@ class PostHocEnsemble(nn.Module):
         # Use the NLLs computed in the loop
         nll = torch.cat(all_nlls, dim=0)
         residuals = torch.abs(all_base_means - all_targets)
-        ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=torch.exp(all_post_hoc_log_sigmas))
-        euc, p_value = compute_euc(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
-        crps = compute_crps(predictions=all_base_means, uncertainties=torch.exp(all_post_hoc_log_sigmas), targets=all_targets)
+        ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=all_post_hoc_sigmas)
+        euc, p_value = compute_euc(predictions=all_base_means, uncertainties=all_post_hoc_sigmas, targets=all_targets)
+        crps = compute_crps(predictions=all_base_means, uncertainties=all_post_hoc_sigmas, targets=all_targets)
 
         # print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
         metrics = {
             'nll': nll.mean().detach().cpu(),
             'rmse': rmse_global.detach().cpu(),
-            'avg_var': torch.exp(all_post_hoc_log_sigmas).mean().detach().cpu(),
+            'avg_var': all_post_hoc_sigmas.mean().detach().cpu(),
             'empirical_confidence_levels': empirical_confidence_levels,
             'ece': ece,
             'euc': euc,
@@ -257,12 +258,12 @@ class PostHocEnsemble(nn.Module):
             'targets': batch_y[-5:, ...].detach().cpu(),
             'errors': batch_errors[-5:, ...].detach().cpu(),
             'mu_batch': batch_means[-5:, ...].detach().cpu(),
-            'sigma_batch': torch.exp(batch_post_hoc_log_sigma[-5:, ...]).detach().cpu(),
+            'sigma_batch': batch_post_hoc_sigma[-5:, ...].detach().cpu(),
             'nll_batch': nll[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
             'rmse_batch': torch.sqrt(batch_errors)[-5:, ...].detach().cpu(),
-            'avg_var_batch': torch.exp(batch_post_hoc_log_sigma)[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
+            'avg_var_batch': batch_post_hoc_sigma[-5:, ...].mean(dim=batch_average_indices).detach().cpu(),
             
-            'all_sigmas': torch.exp(all_post_hoc_log_sigmas),
+            'all_sigmas': all_post_hoc_sigmas,
             'metrics': metrics,
         }
             

@@ -56,7 +56,7 @@ def predict_laplace(preds):
     """
     mean, log_scale = torch.split(preds, 1, dim=1)
     scale = torch.exp(log_scale)
-    return {"mean": mean, "scale": scale, "log_scale": log_scale, "params": log_scale}
+    return {"mean": mean, "sigma": scale, "log_sigma": log_scale, "params": log_scale}
 
 @register_predictor("pred_laplace_posthoc")
 def post_hoc_predict_laplace(preds):
@@ -71,4 +71,4 @@ def post_hoc_predict_laplace(preds):
     """
     log_scale = preds
     scale = torch.exp(log_scale)
-    return {'scale': scale, 'log_scale': log_scale, 'params': log_scale}
+    return {'sigma': scale, 'log_sigma': log_scale, 'params': log_scale}
