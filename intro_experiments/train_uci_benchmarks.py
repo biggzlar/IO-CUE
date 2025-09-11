@@ -22,6 +22,8 @@ from predictors.gaussian import gaussian_nll_detached, predict_gaussian, post_ho
 from predictors.mse import mse, predict_mse
 from predictors.bayescap import bayescap_loss, predict_bayescap
 from predictors.generalized_gaussian import gen_gaussian_nll, predict_gen_gaussian, post_hoc_predict_gen_gaussian
+from predictors.laplace import laplace_nll_detached, post_hoc_predict_laplace
+from predictors.student_t import student_t_nll_detached, post_hoc_predict_student_t
 from evaluation.metrics import compute_ece, compute_nll, compute_euc, compute_crps
 
 plt.rcParams.update(
@@ -136,10 +138,66 @@ def main():
         model_class=SimpleRegressionModel,
         model_params=gaussian_posthoc_model_params,
         n_models=1,
-        device=device
+        device=device,
+        infer=post_hoc_predict_gaussian,
+        loss=gaussian_nll_detached,
     )
     # # Set the in_channels parameter used in the predict method
     # gaussian_posthoc_ensemble.model_params['in_channels'] = 3
+
+    # 5. Laplace post-hoc model
+    laplace_posthoc_model_params = {
+        'in_channels': input_dim + 1,
+        'hidden_dim': args.hidden_dim // 2,
+        'output_dim': 1,  # log_scale
+        'activation': nn.Tanh,
+    }
+
+    laplace_posthoc_ensemble = IOCUE(
+        mean_ensemble=mse_base_ensemble,
+        model_class=SimpleRegressionModel,
+        model_params=laplace_posthoc_model_params,
+        n_models=1,
+        device=device,
+        infer=post_hoc_predict_laplace,
+        loss=laplace_nll_detached,
+    )
+
+    # 6. Generalized Gaussian post-hoc model
+    gen_gaussian_posthoc_model_params = {
+        'in_channels': input_dim + 1,
+        'hidden_dim': args.hidden_dim // 2,
+        'output_dim': 2,  # one_over_alpha, beta
+        'activation': nn.Tanh,
+    }
+
+    gen_gaussian_posthoc_ensemble = IOCUE(
+        mean_ensemble=mse_base_ensemble,
+        model_class=SimpleRegressionModel,
+        model_params=gen_gaussian_posthoc_model_params,
+        n_models=1,
+        device=device,
+        infer=post_hoc_predict_gen_gaussian,
+        loss=gen_gaussian_nll,
+    )
+
+    # 7. Student's t post-hoc model
+    student_t_posthoc_model_params = {
+        'in_channels': input_dim + 1,
+        'hidden_dim': args.hidden_dim // 2,
+        'output_dim': 2,  # log_scale, log_df
+        'activation': nn.Tanh,
+    }
+
+    student_t_posthoc_ensemble = IOCUE(
+        mean_ensemble=mse_base_ensemble,
+        model_class=SimpleRegressionModel,
+        model_params=student_t_posthoc_model_params,
+        n_models=1,
+        device=device,
+        infer=post_hoc_predict_student_t,
+        loss=student_t_nll_detached,
+    )
 
     # import ipdb; ipdb.set_trace()
     LA = PostHocLaplace(
@@ -216,6 +274,51 @@ def main():
         eval_freq=args.eval_freq
     )
 
+    # Train Laplace post-hoc ensemble model
+    print(f"\nTraining Laplace post-hoc ensemble model...")
+    laplace_posthoc_ensemble.optimize(
+        results_dir=results_dir,
+        model_dir=model_dir,
+        train_loader=train_loader,
+        test_loader=test_loader,
+        n_epochs=n_epochs,
+        optimizer_type='AdamW',
+        optimizer_params={'lr': 1e-4, 'weight_decay': 1e-1},
+        scheduler_type='CosineAnnealingLR',
+        scheduler_params={'T_max': n_epochs},
+        eval_freq=args.eval_freq
+    )
+
+    # Train Generalized Gaussian post-hoc ensemble model
+    print(f"\nTraining Generalized Gaussian post-hoc ensemble model...")
+    gen_gaussian_posthoc_ensemble.optimize(
+        results_dir=results_dir,
+        model_dir=model_dir,
+        train_loader=train_loader,
+        test_loader=test_loader,
+        n_epochs=n_epochs,
+        optimizer_type='AdamW',
+        optimizer_params={'lr': 1e-4, 'weight_decay': 1e-1},
+        scheduler_type='CosineAnnealingLR',
+        scheduler_params={'T_max': n_epochs},
+        eval_freq=args.eval_freq
+    )
+
+    # Train Student's t post-hoc ensemble model
+    print(f"\nTraining Student's t post-hoc ensemble model...")
+    student_t_posthoc_ensemble.optimize(
+        results_dir=results_dir,
+        model_dir=model_dir,
+        train_loader=train_loader,
+        test_loader=test_loader,
+        n_epochs=n_epochs,
+        optimizer_type='AdamW',
+        optimizer_params={'lr': 1e-4, 'weight_decay': 1e-1},
+        scheduler_type='CosineAnnealingLR',
+        scheduler_params={'T_max': n_epochs},
+        eval_freq=args.eval_freq
+    )
+
     LA.optimize(
         results_dir=results_dir, 
         model_dir=model_dir, 
@@ -258,6 +361,11 @@ def main():
     gaussian_posthoc_preds = gaussian_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
 
     laplace_preds = LA.predict(X=X_test_tensor)
+
+    # New IO-CUE variants
+    laplace_posthoc_preds = laplace_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
+    gen_gaussian_posthoc_preds = gen_gaussian_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
+    student_t_posthoc_preds = student_t_posthoc_ensemble.predict(X_test_tensor, y_pred=mse_preds['mean'])
     
     # Extract means and uncertainties
     mse_mean = mse_preds['mean'].cpu().numpy()[sort_indices].squeeze()
@@ -271,6 +379,10 @@ def main():
     gaussian_posthoc_sigma = gaussian_posthoc_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
 
     laplace_sigma = laplace_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
+
+    laplace_posthoc_sigma = laplace_posthoc_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
+    gen_gaussian_posthoc_sigma = gen_gaussian_posthoc_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
+    student_t_posthoc_sigma = student_t_posthoc_preds['sigma'].cpu().numpy()[sort_indices].squeeze()
     
     # Ensure y_test is 1D for plotting
     y_test_sorted = y_test_sorted.squeeze()
@@ -283,6 +395,9 @@ def main():
     bayescap_sigma = bayescap_sigma * dataset.y_train_scale.item()
     gaussian_posthoc_sigma = gaussian_posthoc_sigma * dataset.y_train_scale.item()
     laplace_sigma = laplace_sigma * dataset.y_train_scale.item()
+    laplace_posthoc_sigma = laplace_posthoc_sigma * dataset.y_train_scale.item()
+    gen_gaussian_posthoc_sigma = gen_gaussian_posthoc_sigma * dataset.y_train_scale.item()
+    student_t_posthoc_sigma = student_t_posthoc_sigma * dataset.y_train_scale.item()
 
     mse_ep_sigma = mse_ep_sigma * dataset.y_train_scale.item()
     gaussian_al_sigma = gaussian_al_sigma * dataset.y_train_scale.item()
@@ -348,7 +463,52 @@ def main():
     plt.tight_layout()
     plt.savefig(results_dir / f"gaussian_posthoc_plot.png")
 
-    # 5. Gaussian Post-hoc Model
+    # 5. Laplace Post-hoc Model
+    plt.figure(figsize=(10, 6))
+    plt.scatter(X_plot_feature, y_test_sorted, s=10, color='gray', alpha=0.5, label='Test Data')
+    plt.plot(X_plot_feature, mse_mean, color='orange', label='MSE Base + Laplace Post-hoc')
+    plt.fill_between(X_plot_feature, 
+                    mse_mean - 2 * laplace_posthoc_sigma, 
+                    mse_mean + 2 * laplace_posthoc_sigma, 
+                    color='orange', alpha=0.2, label='Uncertainty (±2σ)')
+    plt.xlabel(f'Feature {plot_feature_idx}')
+    plt.ylabel('Target')
+    plt.title(f'Laplace Post-hoc Model - {args.dataset.capitalize()}')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(results_dir / f"laplace_posthoc_plot.png")
+
+    # 6. Generalized Gaussian Post-hoc Model
+    plt.figure(figsize=(10, 6))
+    plt.scatter(X_plot_feature, y_test_sorted, s=10, color='gray', alpha=0.5, label='Test Data')
+    plt.plot(X_plot_feature, mse_mean, color='brown', label='MSE Base + GenGaussian Post-hoc')
+    plt.fill_between(X_plot_feature, 
+                    mse_mean - 2 * gen_gaussian_posthoc_sigma, 
+                    mse_mean + 2 * gen_gaussian_posthoc_sigma, 
+                    color='brown', alpha=0.2, label='Uncertainty (±2σ)')
+    plt.xlabel(f'Feature {plot_feature_idx}')
+    plt.ylabel('Target')
+    plt.title(f'Generalized Gaussian Post-hoc Model - {args.dataset.capitalize()}')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(results_dir / f"gen_gaussian_posthoc_plot.png")
+
+    # 7. Student's t Post-hoc Model
+    plt.figure(figsize=(10, 6))
+    plt.scatter(X_plot_feature, y_test_sorted, s=10, color='gray', alpha=0.5, label='Test Data')
+    plt.plot(X_plot_feature, mse_mean, color='teal', label="MSE Base + Student's t Post-hoc")
+    plt.fill_between(X_plot_feature, 
+                    mse_mean - 2 * student_t_posthoc_sigma, 
+                    mse_mean + 2 * student_t_posthoc_sigma, 
+                    color='teal', alpha=0.2, label='Uncertainty (±2σ)')
+    plt.xlabel(f'Feature {plot_feature_idx}')
+    plt.ylabel('Target')
+    plt.title(f"Student's t Post-hoc Model - {args.dataset.capitalize()}")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(results_dir / f"student_t_posthoc_plot.png")
+
+    # 8. Laplace Approximation
     plt.figure(figsize=(10, 6))
     plt.scatter(X_plot_feature, y_test_sorted, s=10, color='gray', alpha=0.5, label='Test Data')
     plt.plot(X_plot_feature, mse_mean, color='purple', label='MSE Base + Laplace Approximation')
@@ -375,6 +535,9 @@ def main():
     bayescap_sigma_tensor = torch.tensor(bayescap_sigma)
     gaussian_posthoc_sigma_tensor = torch.tensor(gaussian_posthoc_sigma)
     laplace_sigma_tensor = torch.tensor(laplace_sigma)
+    laplace_posthoc_sigma_tensor = torch.tensor(laplace_posthoc_sigma)
+    gen_gaussian_posthoc_sigma_tensor = torch.tensor(gen_gaussian_posthoc_sigma)
+    student_t_posthoc_sigma_tensor = torch.tensor(student_t_posthoc_sigma)
     
     # Compute metrics for MSE base model
     mse_residuals = torch.abs(mse_mean_tensor - y_test_tensor_sorted)
@@ -412,6 +575,27 @@ def main():
     laplace_nll = compute_nll(mse_mean_tensor, laplace_sigma_tensor**2, y_test_tensor_sorted).mean().item()
     laplace_euc, _ = compute_euc(mse_mean_tensor, laplace_sigma_tensor, y_test_tensor_sorted)
     laplace_crps = compute_crps(mse_mean_tensor, laplace_sigma_tensor, y_test_tensor_sorted).mean().item()
+
+    # Compute metrics for Laplace post-hoc model
+    laplace_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))
+    laplace_posthoc_ece, laplace_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, laplace_posthoc_sigma_tensor)
+    laplace_posthoc_nll = compute_nll(mse_mean_tensor, laplace_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
+    laplace_posthoc_euc, _ = compute_euc(mse_mean_tensor, laplace_posthoc_sigma_tensor, y_test_tensor_sorted)
+    laplace_posthoc_crps = compute_crps(mse_mean_tensor, laplace_posthoc_sigma_tensor, y_test_tensor_sorted).mean().item()
+
+    # Compute metrics for Gen. Gaussian post-hoc model
+    gen_gaussian_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))
+    gen_gaussian_posthoc_ece, gen_gaussian_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, gen_gaussian_posthoc_sigma_tensor)
+    gen_gaussian_posthoc_nll = compute_nll(mse_mean_tensor, gen_gaussian_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
+    gen_gaussian_posthoc_euc, _ = compute_euc(mse_mean_tensor, gen_gaussian_posthoc_sigma_tensor, y_test_tensor_sorted)
+    gen_gaussian_posthoc_crps = compute_crps(mse_mean_tensor, gen_gaussian_posthoc_sigma_tensor, y_test_tensor_sorted).mean().item()
+
+    # Compute metrics for Student's t post-hoc model
+    student_t_posthoc_rmse = np.sqrt(np.mean((mse_mean - y_test_sorted) ** 2))
+    student_t_posthoc_ece, student_t_posthoc_empirical_confidence_levels = compute_ece(mse_residuals, student_t_posthoc_sigma_tensor)
+    student_t_posthoc_nll = compute_nll(mse_mean_tensor, student_t_posthoc_sigma_tensor**2, y_test_tensor_sorted).mean().item()
+    student_t_posthoc_euc, _ = compute_euc(mse_mean_tensor, student_t_posthoc_sigma_tensor, y_test_tensor_sorted)
+    student_t_posthoc_crps = compute_crps(mse_mean_tensor, student_t_posthoc_sigma_tensor, y_test_tensor_sorted).mean().item()
     
     results = {
         'mse_base': {
@@ -441,6 +625,27 @@ def main():
             'nll': gaussian_posthoc_nll,
             'euc': gaussian_posthoc_euc,
             'crps': gaussian_posthoc_crps
+        },
+        'laplace_posthoc': {
+            'rmse': laplace_posthoc_rmse,
+            'ece': laplace_posthoc_ece.item(),
+            'nll': laplace_posthoc_nll,
+            'euc': laplace_posthoc_euc,
+            'crps': laplace_posthoc_crps
+        },
+        'gen_gaussian_posthoc': {
+            'rmse': gen_gaussian_posthoc_rmse,
+            'ece': gen_gaussian_posthoc_ece.item(),
+            'nll': gen_gaussian_posthoc_nll,
+            'euc': gen_gaussian_posthoc_euc,
+            'crps': gen_gaussian_posthoc_crps
+        },
+        'student_t_posthoc': {
+            'rmse': student_t_posthoc_rmse,
+            'ece': student_t_posthoc_ece.item(),
+            'nll': student_t_posthoc_nll,
+            'euc': student_t_posthoc_euc,
+            'crps': student_t_posthoc_crps
         },
         'laplace': {
             'rmse': laplace_rmse,
@@ -483,6 +688,27 @@ def main():
         f.write(f"  EUC: {results['gaussian_posthoc']['euc']:.4f}\n")
         f.write(f" CRPS: {results['gaussian_posthoc']['crps']:.4f}\n\n")
 
+        f.write("Laplace Post-hoc Model:\n")
+        f.write(f" RMSE: {results['laplace_posthoc']['rmse']:.4f}\n")
+        f.write(f"  ECE: {results['laplace_posthoc']['ece']:.4f}\n")
+        f.write(f"  NLL: {results['laplace_posthoc']['nll']:.4f}\n")
+        f.write(f"  EUC: {results['laplace_posthoc']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['laplace_posthoc']['crps']:.4f}\n\n")
+
+        f.write("Generalized Gaussian Post-hoc Model:\n")
+        f.write(f" RMSE: {results['gen_gaussian_posthoc']['rmse']:.4f}\n")
+        f.write(f"  ECE: {results['gen_gaussian_posthoc']['ece']:.4f}\n")
+        f.write(f"  NLL: {results['gen_gaussian_posthoc']['nll']:.4f}\n")
+        f.write(f"  EUC: {results['gen_gaussian_posthoc']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['gen_gaussian_posthoc']['crps']:.4f}\n\n")
+
+        f.write("Student's t Post-hoc Model:\n")
+        f.write(f" RMSE: {results['student_t_posthoc']['rmse']:.4f}\n")
+        f.write(f"  ECE: {results['student_t_posthoc']['ece']:.4f}\n")
+        f.write(f"  NLL: {results['student_t_posthoc']['nll']:.4f}\n")
+        f.write(f"  EUC: {results['student_t_posthoc']['euc']:.4f}\n")
+        f.write(f" CRPS: {results['student_t_posthoc']['crps']:.4f}\n\n")
+
         f.write("Laplace Approximation:\n")
         f.write(f" RMSE: {results['laplace']['rmse']:.4f}\n")
         f.write(f"  ECE: {results['laplace']['ece']:.4f}\n")
@@ -495,9 +721,17 @@ def main():
     # Create calibration plot
     fig, ax = plt.subplots(figsize=(5, 5))
     confidence_levels = np.arange(0., 1.1, 0.1)
-    labels = ["mse", "gaussian", "bayescap", "io-cue"]
+    labels = ["mse", "gaussian", "bayescap", "io-cue (gauss)", "io-cue (laplace)", "io-cue (gen-gauss)", "io-cue (student-t)"]
     ax.plot(confidence_levels, confidence_levels, linestyle='--', color='black', zorder=-1)
-    for i, empirical_confidence_levels in enumerate([mse_empirical_confidence_levels, gaussian_empirical_confidence_levels, bayescap_empirical_confidence_levels, gaussian_posthoc_empirical_confidence_levels]):
+    for i, empirical_confidence_levels in enumerate([
+        mse_empirical_confidence_levels,
+        gaussian_empirical_confidence_levels,
+        bayescap_empirical_confidence_levels,
+        gaussian_posthoc_empirical_confidence_levels,
+        laplace_posthoc_empirical_confidence_levels,
+        gen_gaussian_posthoc_empirical_confidence_levels,
+        student_t_posthoc_empirical_confidence_levels,
+    ]):
 
         empirical_confidence_levels = np.concatenate([np.zeros(1), empirical_confidence_levels])
         ax.plot(confidence_levels, empirical_confidence_levels, marker='o', zorder=1, label=labels[i])

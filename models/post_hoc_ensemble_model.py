@@ -171,7 +171,7 @@ class PostHocEnsemble(nn.Module):
                 print()
                     
         pbar.close()
-        self.load(f"{model_dir}/post_hoc_ensemble_model_best.pth")
+        self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
         
 
     def evaluate(self, test_loader):
@@ -219,7 +219,7 @@ class PostHocEnsemble(nn.Module):
 
                 # Compute NLL using framework's loss function if available
                 batch_params = batch_post_hoc_preds['params']
-                batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False)
+                batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False, epoch=1, n_epochs=1)
                 all_nlls.append(batch_nll)
 
                 batch_errors = torch.abs(batch_y - batch_means).square().mean(dim=batch_average_indices)

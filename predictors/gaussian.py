@@ -16,9 +16,6 @@ def gaussian_nll_detached(y_pred, y_true, params, reduce=True, **kwargs):
     residual = (y_true - y_pred.detach()) ** 2
     nll = 0.5 * torch.exp(-2 * log_sigma) * residual + log_sigma
     nll = nll + 0.5 * torch.log(torch.tensor(2 * np.pi))
-    if nll.shape[1] != 1:
-        print(nll.shape, y_true.shape)
-        exit()
     return nll.mean() if reduce else nll
 
 @register_predictor("pred_gaussian")
