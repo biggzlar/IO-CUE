@@ -33,7 +33,7 @@ class BaseEnsemble(nn.Module):
             model.to(self.device)
 
         self.infer = infer
-        self.min_nll = float('inf')
+        self.min_rmse = float('inf')
         self.overfit_counter = 0
 
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100, 
@@ -164,8 +164,8 @@ class BaseEnsemble(nn.Module):
                     plt.savefig(f"{results_dir}/base_ensemble_model_{epoch + 1}.png")
                     plt.close()
 
-                if results['nll'] < self.min_nll:
-                    self.min_nll = results['nll']
+                if results['rmse'] < self.min_rmse:
+                    self.min_rmse = results['rmse']
                     self.save(f"{model_dir}/base_ensemble_best.pth")
                     self.overfit_counter = 0
                 else:
@@ -239,7 +239,7 @@ class BaseEnsemble(nn.Module):
             'rmse': rmse,
             'nll': nll.item(),
             'ece': ece.item(),
-            'euc': euc.item(),
+            'euc': euc,
             'crps': crps.mean().detach().cpu(),
             'all_means': all_means,
             'all_targets': all_targets,

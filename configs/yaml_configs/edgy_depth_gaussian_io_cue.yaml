@@ -15,13 +15,14 @@ dataset_attrs:
   shuffle: True
   noise_level: 0.1
   train_split: 0.1
-  augment: false
+  augment: True
+  augment_test_data: False
   augmentations:
-    colorjitter: false
-    gaussianblur: false
-    grayscale: false
-    flip: false
-    gaussian_noise: false
+    colorjitter: False
+    gaussianblur: False
+    grayscale: False
+    flip: True
+    gaussian_noise: True
 
 # Model classes
 mean_model_class: UNet
@@ -33,15 +34,8 @@ mean_model_params:
   out_channels: [1]
   drop_prob: 0.2
 
-# # Mean model training parameters
-# mean_optimizer_type: Adam
-# mean_optimizer_params:
-#   lr: 5.0e-5
-#   weight_decay: 1.0e-5
-# mean_scheduler_type: null
-# mean_scheduler_params: null
+# Mean model inference
 mean_predictor: pred_mse
-# mean_criterion: crit_edge_aware_mse
 
 # Variance model parameters
 variance_framework: iocue

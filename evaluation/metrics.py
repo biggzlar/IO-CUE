@@ -119,7 +119,7 @@ def compute_euc(predictions, uncertainties, targets):
         if np.isnan(correlation):
             correlation, p_value = 0.0, 1.0
         
-        return correlation, p_value
+        return correlation.item(), p_value
     except:
         # Fallback in case of errors
         return 0.0, 1.0

@@ -16,6 +16,7 @@ dataset_attrs:
   noise_level: 0.1
   train_split: 0.1
   augment: false
+  augment_test_data: false
   augmentations:
     colorjitter: false
     gaussianblur: false

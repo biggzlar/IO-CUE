@@ -13,7 +13,7 @@ from dataloaders.simple_depth import DepthDataset
 # Imports removed - now using registry system
 
 from models import BaseEnsemble
-from models.post_hoc_frameworks import IOCUE, BayesCap
+from models.post_hoc_frameworks import IOCUE, ICUE, BayesCap, SplitIOCUE
 
 def load_yaml_config(file_path, device):
     """
@@ -129,8 +129,12 @@ def resolve_config_references(config, device):
 def resolve_framework(variance_framework_name):
     if variance_framework_name == "iocue" or variance_framework_name == "io-cue":
         return IOCUE
+    elif variance_framework_name == "icue" or variance_framework_name == "i-cue":
+        return ICUE
     elif variance_framework_name == "bayescap" or variance_framework_name == "bayes-cap":
         return BayesCap
+    elif variance_framework_name in ("split-iocue", "split_iocue", "split_io-cue"):
+        return SplitIOCUE
     else:
         raise ValueError(f"Unknown framework: {variance_framework_name}")
     
@@ -173,6 +177,7 @@ def resolve_dataset(dataset_name, dataset_attrs, batch_size):
         dataset = DepthDataset(path=dataset_path, 
             img_size=dataset_attrs.get('img_size', (128, 160)),
             augment=dataset_attrs.get('augment', False),
+            augment_test_data=dataset_attrs.get('augment_test_data', False),
             train_split=dataset_attrs.get('train_split', 1.0),
             **dataset_attrs.get('augmentations', {}))
         
