@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
 def load_depth_path(path):
     dataset = h5py.File(path, "r")
@@ -20,28 +21,12 @@ def split_data(data, train_split):
     y_ = y[:train_split]
     return (X_, y_)
 
-# def split_data(data, train_split):
-#     X, y = data
-    
-#     # Load data into memory (NOTE: this takes a lot of memory)
-#     X = X[:]
-#     y = y[:]
-
-#     # Shuffle data before slicing
-#     random.seed(42)
-#     random.shuffle(X)
-#     random.seed(42)
-#     random.shuffle(y)
-
-#     # Slice
-#     X_ = X[:train_split]
-#     y_ = y[:train_split]
-#     return (X_, y_)
 
 class DepthDataset:
-    def __init__(self, path=None, img_size=None, augment=True, train_split=1.0, 
+    def __init__(self, path=None, img_size=None, augment=True, augment_test_data=True, train_split=1.0, 
                  flip=False, colorjitter=False, gaussianblur=False, grayscale=False, gaussian_noise=False):
         self.augment = augment
+        self.augment_test_data = augment_test_data
         self.flip = flip
         self.colorjitter = colorjitter
         self.gaussianblur = gaussianblur
@@ -66,7 +51,10 @@ class DepthDataset:
                 gaussianblur=self.gaussianblur, grayscale=self.grayscale,
                 gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob
             )
-            self.test = _DepthDataset(test_data, img_size=self.img_size, augment=False)
+            self.test = _DepthDataset(test_data, img_size=self.img_size, augment=self.augment_test_data, 
+                flip=self.flip, colorjitter=self.colorjitter, 
+                gaussianblur=self.gaussianblur, grayscale=self.grayscale,
+                gaussian_noise=self.gaussian_noise, flip_prob=self.flip_prob)
         else:
             data = load_depth_path(self.path)
             self.train = None
@@ -97,10 +85,10 @@ class _DepthDataset(Dataset):
         
         # Add other transforms (not flip)
         if augment:
-            if colorjitter:
-                input_transforms.append(transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1))
-            if gaussianblur:
-                input_transforms.append(transforms.GaussianBlur(kernel_size=3, sigma=(0.01, 0.5)))
+            if colorjitter and np.random.random() < 0.8:
+                input_transforms.append(transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.05))
+            if gaussianblur and np.random.random():
+                input_transforms.append(transforms.GaussianBlur(kernel_size=3, sigma=(1.0)))
             if grayscale:
                 input_transforms.append(transforms.RandomGrayscale(p=0.7))
 
@@ -108,6 +96,7 @@ class _DepthDataset(Dataset):
         input_transforms.extend([
             transforms.ToTensor(),
             transforms.Resize(img_size) if img_size is not None else transforms.Lambda(lambda x: x),
+            # transforms.Resize(img_size, interpolation=InterpolationMode.BILINEAR, antialias=True) if img_size is not None else transforms.Lambda(lambda x: x),
         ])
         
         self.input_transform = transforms.Compose(input_transforms)
@@ -116,6 +105,7 @@ class _DepthDataset(Dataset):
         self.output_transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(img_size) if img_size is not None else transforms.Lambda(lambda x: x),
+            # transforms.Resize(img_size, interpolation=InterpolationMode.NEAREST) if img_size is not None else transforms.Lambda(lambda x: x),
         ])
 
     def __len__(self):
