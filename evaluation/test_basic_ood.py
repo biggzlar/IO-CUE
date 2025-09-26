@@ -33,8 +33,9 @@ def run_evaluation(id_dataset, ood_dataset, device, dataset_name):
     edgy_model = load_mean_model(
         BaseEnsemble, 
         # model_path="results/base_unet_depth_model_augmented/checkpoints/base_ensemble_model_45.pth",
-        model_path="results/pretrained/base_mse_ensemble.pth",
+        # model_path="results/pretrained/base_mse_ensemble.pth",
         # model_path="results/base_unet_depth_model_very_augmented/checkpoints/base_ensemble_model_95.pth", 
+        model_path="results/base_unet_cosine_annealing_256_grayscale/checkpoints/base_ensemble_best.pth", 
         inference_fn=predict_mse, 
         model_params={"in_channels": 3, "out_channels": [1], "drop_prob": 0.2}, 
         n_models=5, 
@@ -314,5 +315,5 @@ if __name__ == "__main__":
     plt.savefig("results/ood_basic_analysis/apollo_roc.png", dpi=300, bbox_inches='tight')
     plt.close()
     
-    print("Done did it!")
+    print("Done. Results saved to results/ood_basic_analysis/")
     
