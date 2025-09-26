@@ -159,13 +159,13 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
 
         ax_error = axs[i, 3]
         im3 = ax_error.imshow(torch.abs(mu - y).squeeze().cpu().numpy(), cmap="plasma")
-        im3.set_clim(0, 0.5)
+        # im3.set_clim(0, 0.5)
         ax_error.set_title(f"Error")
         ax_error.axis("off")
 
         ax_var = axs[i, 4]
         im4 = ax_var.imshow(sigma.squeeze().cpu().numpy(), cmap="plasma")
-        im4.set_clim(0, 0.5)
+        # im4.set_clim(0, 0.5)
         ax_var.set_title(f"Standard Deviation")
         ax_var.axis("off")
 
