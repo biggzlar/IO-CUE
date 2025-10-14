@@ -11,7 +11,7 @@ from dataloaders.simple_depth import DepthDataset
 from models.base_ensemble_model import BaseEnsemble
 from models.ttda_model import TTDAModel
 from networks.unet_model import UNet
-from evaluation.eval_depth_utils import get_predictions, load_mean_model, load_variance_model
+from evaluation.utils import get_predictions, load_mean_model, load_variance_model
 from models.post_hoc_frameworks import IOCUE, BayesCap
 
 from predictors.generalized_gaussian import post_hoc_predict_gen_gaussian

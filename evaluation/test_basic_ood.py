@@ -13,8 +13,8 @@ from networks.unet_model import UNet, BabyUNet, MediumUNet
 from predictors.gaussian import post_hoc_predict_gaussian, predict_gaussian
 from predictors.bayescap import predict_bayescap
 from predictors.mse import predict_mse
-from evaluation.utils_ood import plot_ood_analysis
-from evaluation.eval_depth_utils import load_mean_model, load_variance_model
+from evaluation.utils import plot_ood_analysis
+from evaluation.utils import load_mean_model, load_variance_model
 
 
 def run_evaluation(id_dataset, ood_dataset, device, dataset_name):

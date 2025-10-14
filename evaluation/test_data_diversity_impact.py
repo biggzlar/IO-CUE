@@ -17,7 +17,7 @@ from networks.unet_model import UNet
 # from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
 from predictors.mse import predict_mse
 
-from eval_depth_utils import load_mean_model, load_variance_model
+from evaluation.utils import load_mean_model, load_variance_model
 
 # Set up matplotlib style
 plt.rcParams.update({

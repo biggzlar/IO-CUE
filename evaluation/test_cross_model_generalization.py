@@ -11,7 +11,7 @@ from models.post_hoc_ensemble_model import PostHocEnsemble
 from networks.unet_model import UNet
 from predictors.gaussian import post_hoc_predict_gaussian
 from predictors.mse import predict_mse
-from evaluation.eval_depth_utils import load_mean_model, load_variance_model
+from evaluation.utils import load_mean_model, load_variance_model
 
 plt.rcParams.update(
     {

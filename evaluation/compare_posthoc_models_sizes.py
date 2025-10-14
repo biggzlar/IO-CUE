@@ -15,8 +15,8 @@ from dataloaders.simple_depth import DepthDataset
 from dataloaders.apolloscape_depth import ApolloscapeDepthDataset
 from models.base_ensemble_model import BaseEnsemble
 from networks.unet_model import MediumUNet, SmallUNet, UNet
-from evaluation.utils_ood import plot_ood_analysis
-from evaluation.eval_depth_utils import load_mean_model, load_variance_model
+from evaluation.utils import plot_ood_analysis
+from evaluation.utils import load_mean_model, load_variance_model
 from models.post_hoc_frameworks import IOCUE
 
 from predictors.mse import predict_mse

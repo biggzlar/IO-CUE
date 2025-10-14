@@ -6,11 +6,11 @@ import os
 import argparse
 import torch
 import matplotlib.pyplot as plt
-from dataloaders import DepthDataset
+from dataloaders.simple_depth import DepthDataset
 from models.depth import gaussian as gaussian_model
 import torch.nn.functional as F
 import re
-from eval_depth_utils import get_predictions, visualize_results
+from evaluation.utils import get_predictions, visualize_results
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate depth model and plot sample predictions")

@@ -16,7 +16,7 @@ from models.post_hoc_frameworks import IOCUE
 from networks.unet_model import UNet, BabyUNet, MediumUNet
 from predictors.gaussian import predict_gaussian, gaussian_nll
 from predictors.mse import predict_mse, rmse
-from evaluation.eval_depth_utils import load_mean_model, load_variance_model
+from evaluation.utils import load_mean_model, load_variance_model
 
 
 def apply_gaussian_noise(batch, sigma):
