@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-from evaluation.eval_depth_utils import visualize_results
+from evaluation.utils import visualize_results
 import argparse
 from configs.config_utils import (
     process_config_from_args,

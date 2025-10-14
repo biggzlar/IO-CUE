@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataloaders.dataset_utils import create_bootstrapped_dataloaders
 from tqdm import tqdm
-from evaluation.metrics import compute_ece, compute_euc, compute_crps
+from evaluation.utils import compute_ece, compute_euc, compute_crps
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
 
 from predictors.gaussian import gaussian_nll

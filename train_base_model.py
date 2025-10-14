@@ -17,6 +17,7 @@ from datetime import datetime
 from dataloaders.simple_depth import DepthDataset as NYUDepthDataset
 from models import BaseEnsemble
 from networks.unet_model import UNet
+from predictors.gaussian import gaussian_nll, predict_gaussian
 from predictors.mse import mse, predict_mse
 from predictors.edge_aware_losses import edge_aware_mse_loss
 

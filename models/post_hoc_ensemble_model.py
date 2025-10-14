@@ -5,9 +5,9 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from dataloaders.dataset_utils import create_bootstrapped_dataloaders
-from evaluation.metrics import compute_ece, compute_euc, compute_crps
+from evaluation.utils import compute_ece, compute_euc, compute_crps
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
-from evaluation.eval_depth_utils import get_predictions, visualize_results
+from evaluation.utils import get_predictions, visualize_results
 
 from predictors.gaussian import gaussian_nll
 from predictors.bayescap import predict_bayescap

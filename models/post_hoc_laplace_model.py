@@ -5,8 +5,8 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from configs.config_utils import setup_result_directories
-from evaluation.metrics import compute_ece, compute_euc, compute_crps
-from evaluation.eval_depth_utils import get_predictions, visualize_results
+from evaluation.utils import compute_ece, compute_euc, compute_crps
+from evaluation.utils import get_predictions, visualize_results
 
 from predictors.gaussian import gaussian_nll
 

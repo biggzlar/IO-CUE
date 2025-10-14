@@ -24,7 +24,7 @@ from predictors.bayescap import bayescap_loss, predict_bayescap
 from predictors.generalized_gaussian import gen_gaussian_nll, predict_gen_gaussian, post_hoc_predict_gen_gaussian
 from predictors.laplace import laplace_nll_detached, post_hoc_predict_laplace
 from predictors.student_t import student_t_nll_detached, post_hoc_predict_student_t
-from evaluation.metrics import compute_ece, compute_nll, compute_euc, compute_crps
+from evaluation.utils import compute_ece, compute_nll, compute_euc, compute_crps
 
 plt.rcParams.update(
     {
