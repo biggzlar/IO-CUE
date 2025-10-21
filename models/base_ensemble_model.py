@@ -173,10 +173,10 @@ class BaseEnsemble(nn.Module):
 
                 # if self.overfit_counter > 8:
                 #     print(f"Overfitting detected at epoch {epoch + 1}, loading best model")
-                #     self.load(f"{model_dir}/base_ensemble_model_best.pt")
                 #     break
         
         pbar.close()
+        self.load(f"{model_dir}/base_ensemble_model_best.pt")
     
     def evaluate(self, test_loader):
         """
