@@ -41,10 +41,17 @@ class PostHocEnsemble(nn.Module):
 
         self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'crps': [], 'p_value': []}
         self.overfit_counter = 0
+        # Persistent training state for step-wise optimization
+        self._optimizers = None
+        self._schedulers = None
+        self._paired_mean_models = None
+        self._epoch = 0  # 0-based global epoch counter across calls
+        self._total_epochs = None  # optional total epochs target across calls
+        self.min_nll = float('inf')
 
     def optimize(self, results_dir, model_dir, train_loader, test_loader=None, n_epochs=100,
               optimizer_type='Adam', optimizer_params=None, scheduler_type=None, 
-              scheduler_params=None, pair_models=False, eval_freq=100):
+              scheduler_params=None, pair_models=False, eval_freq=100, one_epoch=False, load_best_at_end=True):
         """
         Train the post-hoc ensemble for uncertainty estimation
         
@@ -60,24 +67,41 @@ class PostHocEnsemble(nn.Module):
             pair_models: Whether to pair each variance model with a specific mean model (1:1)
             criterion: Loss function to use
             eval_freq: Frequency (in epochs) to evaluate on test set
+            one_epoch: If True, run exactly one epoch and return, keeping optimizer/scheduler state
+            load_best_at_end: If True and not one_epoch, load the best checkpoint at the end if available
         """
-        # Initialize training components
-        optimizers, schedulers, paired_mean_models = self.initialize_training_components(
-            optimizer_type, optimizer_params, scheduler_type, scheduler_params
-        )
+        # Initialize or reuse persistent training components
+        if self._optimizers is None or self._schedulers is None or self._paired_mean_models is None:
+            optimizers, schedulers, paired_mean_models = self.initialize_training_components(
+                optimizer_type, optimizer_params, scheduler_type, scheduler_params
+            )
+            self._optimizers = optimizers
+            self._schedulers = schedulers
+            self._paired_mean_models = paired_mean_models
+        else:
+            optimizers = self._optimizers
+            schedulers = self._schedulers
+            paired_mean_models = self._paired_mean_models
+
+        # Remember intended total epochs if provided (first call wins)
+        if self._total_epochs is None:
+            self._total_epochs = n_epochs
         
         # Create a bootstrapped dataloader for each model
         dataloaders = create_bootstrapped_dataloaders(train_loader, len(self.models))
         
         finished = [False] * len(self.models)
-        self.min_nll = float('inf')
+        if self._epoch == 0:
+            self.min_nll = float('inf')
         
         # Train all models concurrently
         dataloader_iters = [iter(dataloaders[i]) for i in range(len(self.models))]
         epoch_losses = [0.0 for _ in range(len(self.models))]
         
-        pbar = tqdm(range(n_epochs), desc="UQ")
-        for epoch in pbar:
+        epochs_to_run = 1 if one_epoch else n_epochs
+        pbar = tqdm(range(epochs_to_run), desc="UQ")
+        for _ in pbar:
+            global_epoch_index = self._epoch  # 0-based global epoch index
             # Reset epoch metrics
             for i in range(len(self.models)):
                 epoch_losses[i] = 0.0
@@ -119,7 +143,14 @@ class PostHocEnsemble(nn.Module):
                     # Forward pass for variance model
                     params = self._predict(X=batch_X, y_pred=batch_y_pred, idx=i)
                         
-                    loss = self.loss(y_true=batch_y_true, y_pred=batch_y_pred, params=params, epoch=epoch, n_epochs=n_epochs, reduce=True)
+                    loss = self.loss(
+                        y_true=batch_y_true,
+                        y_pred=batch_y_pred,
+                        params=params,
+                        epoch=global_epoch_index,
+                        n_epochs=self._total_epochs if self._total_epochs is not None else n_epochs,
+                        reduce=True
+                    )
                     
                     # Backward pass
                     loss.backward()
@@ -146,15 +177,16 @@ class PostHocEnsemble(nn.Module):
                               "sigma": f"{batch_sigma.mean().item():.2f}"})
             
             # Evaluate on test set if requested
-            if test_loader is not None and epoch % eval_freq == 0:
+            if test_loader is not None and global_epoch_index % eval_freq == 0:
                 results = self.evaluate(test_loader)
                 
-                print(f"\nEpoch {epoch+1}/{n_epochs} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
+                total_epochs_display = self._total_epochs if self._total_epochs is not None else n_epochs
+                print(f"\nEpoch {global_epoch_index+1}/{total_epochs_display} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
                 self.update_log(results)
                 self.pickle_log(f"{results_dir}/post_hoc_ensemble_model_log.pkl")
                 if results['metrics']['nll'] < self.min_nll:
                     self.min_nll = results['metrics']['nll']
-                    self.save(f"{model_dir}/post_hoc_ensemble_model_{epoch + 1}.pth")
+                    self.save(f"{model_dir}/post_hoc_ensemble_model_{global_epoch_index + 1}.pth")
                     self.save(f"{model_dir}/post_hoc_ensemble_model_best.pt")
                     self.overfit_counter = 0
                 else:
@@ -162,17 +194,35 @@ class PostHocEnsemble(nn.Module):
 
                 # We can only do this specific visualization if the dataset is simple_depth
                 if len(batch_X.shape) == 4:
-                    visualize_results(results, num_samples=5, metric_name="nll", path=f"{results_dir}", suffix=f"_{epoch}")
+                    visualize_results(results, num_samples=5, metric_name="nll", path=f"{results_dir}", suffix=f"_{global_epoch_index}")
                 
                 # if self.overfit_counter > 8:
                 #     self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
                 #     break
 
                 print()
+            
+            # Advance global epoch counter at end of this epoch
+            self._epoch += 1
                     
         pbar.close()
-        self.load(f"{model_dir}/post_hoc_ensemble_model_best.pt")
+        if not one_epoch and load_best_at_end:
+            best_path = f"{model_dir}/post_hoc_ensemble_model_best.pt"
+            if os.path.exists(best_path):
+                self.load(best_path)
         
+    def reset_training_state(self):
+        """
+        Reset persistent optimizer/scheduler state and epoch counter.
+        Call before starting a new independent training run.
+        """
+        self._optimizers = None
+        self._schedulers = None
+        self._paired_mean_models = None
+        self._epoch = 0
+        self._total_epochs = None
+        self.overfit_counter = 0
+        self.min_nll = float('inf')
 
     def evaluate(self, test_loader):
         """
