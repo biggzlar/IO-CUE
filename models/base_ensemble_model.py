@@ -176,7 +176,7 @@ class BaseEnsemble(nn.Module):
                 #     break
         
         pbar.close()
-        self.load(f"{model_dir}/base_ensemble_model_best.pt")
+        self.load(f"{model_dir}/base_ensemble_best.pth")
     
     def evaluate(self, test_loader):
         """
