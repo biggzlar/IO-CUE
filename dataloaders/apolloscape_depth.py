@@ -49,7 +49,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     
     dataset = ApolloscapeDepthDataset()
-    test_loader = dataset.get_dataloader(batch_size=4)
+    test_loader = dataset.get_dataloaders(batch_size=4)[1]
     
     # Show a few samples
     for i, (images, depths) in enumerate(test_loader):

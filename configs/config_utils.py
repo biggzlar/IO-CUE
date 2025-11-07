@@ -10,6 +10,8 @@ import yaml
 from networks.simple_regression_model import SimpleRegressionModel
 from networks.unet_model import UNet
 from dataloaders.simple_depth import DepthDataset
+from dataloaders.kitti_depth import KITTIDepthDataset
+from dataloaders.vkitti_depth import VKITTIDepthDataset
 # Imports removed - now using registry system
 
 from models import BaseEnsemble
@@ -187,17 +189,37 @@ def resolve_dataset(dataset_name, dataset_attrs, batch_size):
             shuffle=dataset_attrs.get('shuffle', True)
         )
         
-        print("Dataset augment: ", dataset.augment)
-        print(dataset.colorjitter, dataset.gaussianblur, dataset.augment)
-        print("Dataset train split: ", dataset.train_split_idx)
-        print("Dataset train length: ", len(train_loader))
         result['train_loader'] = train_loader
         result['test_loader'] = test_loader
         # Use a default noise level for depth data
         result['noise_level'] = dataset_attrs.get('noise_level', 0.1)
-    
+    elif dataset_name == "kitti":
+        dataset_path = dataset_attrs.get('dataset_path', None)
+        dataset = KITTIDepthDataset(
+            path=dataset_path,
+            img_size=dataset_attrs.get('img_size', (128, 256)),
+            augment=dataset_attrs.get('augment', False),
+            augment_test_data=dataset_attrs.get('augment_test_data', False),
+            train_split=dataset_attrs.get('train_split', 1.0),
+            **dataset_attrs.get('augmentations', {})
+        )
+        train_loader, test_loader = dataset.get_dataloaders(batch_size=batch_size, shuffle=dataset_attrs.get('shuffle', True))
+        result['train_loader'] = train_loader
+        result['test_loader'] = test_loader
+        result['noise_level'] = dataset_attrs.get('noise_level', 0.1)
+    elif dataset_name == "vkitti":
+        dataset = VKITTIDepthDataset(img_size=dataset_attrs.get('img_size', (128, 256)), augment=dataset_attrs.get('augment', False), **dataset_attrs.get('augmentations', {}))
+        train_loader, test_loader = dataset.get_dataloaders(batch_size=batch_size, shuffle=dataset_attrs.get('shuffle', True))
+        result['train_loader'] = train_loader
+        result['test_loader'] = test_loader
+        result['noise_level'] = dataset_attrs.get('noise_level', 0.1)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
+    print("Dataset augment: ", dataset.augment)
+    print(dataset.colorjitter, dataset.gaussianblur, dataset.augment)
+    print("Dataset train length: ", len(train_loader))
+    print("Dataset test length: ", len(test_loader))
     
     return result
 

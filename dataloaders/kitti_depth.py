@@ -10,6 +10,7 @@ from torchvision.io import decode_image, ImageReadMode, read_file
 from PIL import Image
 from pathlib import Path
 
+# from tqdm import tqdm
 
 def _list_sequence_dirs(root: str) -> List[str]:
     """Return sorted list of sequence directories for a split (train/val)."""
@@ -139,21 +140,25 @@ def scan_kitti_pairs(data_root: str, split: str, camera_id: str) -> List[Tuple[s
 class KITTIDepthDataset:
     def __init__(
         self,
-        data_root: str = "/mnt/data/kitti_data",
-        camera_id: str = "image_02",
-        img_size: Tuple[int, int] = (128, 160),
-        max_depth_meters: float = 80.0,
-        train_split: float = 1.0,
-        pairs_file: Optional[str] = None,
-        use_dense_output: bool = True,
-        dense_dirs: Optional[List[str]] = None,
-        dense_assumed_max_meters: float = 80.0,
+        # Common/simple-depth-style args
+        path: Optional[str] = None,
+        img_size: Optional[Tuple[int, int]] = (128, 256),
         augment: bool = False,
+        augment_test_data: bool = False,
+        train_split: float = 1.0,
         flip: bool = False,
         colorjitter: bool = False,
         gaussianblur: bool = False,
         grayscale: bool = False,
         gaussian_noise: bool = False,
+        # KITTI-specific optional args (kept for flexibility/back-compat)
+        data_root: str = "/mnt/data/kitti_data",
+        camera_id: str = "image_02",
+        pairs_file: Optional[str] = None,
+        use_dense_output: bool = True,
+        dense_dirs: Optional[List[str]] = None,
+        max_depth_meters: float = 80.0,
+        dense_assumed_max_meters: float = 80.0,
     ):
         """KITTI Depth dataset wrapper that exposes train and val dataloaders.
 
@@ -165,18 +170,46 @@ class KITTIDepthDataset:
             train_split: Fraction of training frames to keep (0-1]
             augment: Apply augmentations to train split
         """
+        # Store config
+        self.path = path
         self.data_root = data_root
         self.camera_id = camera_id
         self.img_size = img_size
         self.max_depth_meters = max_depth_meters
         self.train_split = train_split
         self.dense_assumed_max_meters = dense_assumed_max_meters
+        self.augment = augment
+        self.augment_test_data = augment_test_data
+        self.flip = flip
+        self.colorjitter = colorjitter
+        self.gaussianblur = gaussianblur
+        self.grayscale = grayscale
+        self.gaussian_noise = gaussian_noise
 
         # Default: use constant eigen pairs path like other loaders with fixed sources
         default_pairs = "/mnt/data/KITTI_Dense_Depth/utils/eigen_train_pairs.txt"
-        use_pairs_path = pairs_file if pairs_file is not None else default_pairs
 
-        if os.path.isfile(use_pairs_path):
+        # Resolve source based on provided path/pairs_file/data_root
+        use_pairs_path: Optional[str] = None
+        scan_from_root: bool = False
+
+        if self.path is not None:
+            if os.path.isfile(self.path):
+                use_pairs_path = self.path
+            elif os.path.isdir(self.path):
+                # Treat provided path as data root
+                self.data_root = self.path
+                scan_from_root = True
+        elif pairs_file is not None and os.path.isfile(pairs_file):
+            use_pairs_path = pairs_file
+        else:
+            # Fallback to default eigen pairs if available, else scan data_root
+            if os.path.isfile(default_pairs):
+                use_pairs_path = default_pairs
+            else:
+                scan_from_root = True
+
+        if use_pairs_path is not None and os.path.isfile(use_pairs_path):
             all_pairs = read_pairs(use_pairs_path, use_dense_output=use_dense_output, dense_dirs=dense_dirs)
             # Create a 95%/5% split like HyperSim; apply train_split to the 95% portion
             if len(all_pairs) == 0:
@@ -207,12 +240,12 @@ class KITTIDepthDataset:
                     is_train=True,
                     max_depth_meters=self.max_depth_meters,
                     dense_assumed_max_meters=self.dense_assumed_max_meters,
-                    augment=augment,
-                    flip=flip,
-                    colorjitter=colorjitter,
-                    gaussianblur=gaussianblur,
-                    grayscale=grayscale,
-                    gaussian_noise=gaussian_noise,
+                    augment=self.augment,
+                    flip=self.flip,
+                    colorjitter=self.colorjitter,
+                    gaussianblur=self.gaussianblur,
+                    grayscale=self.grayscale,
+                    gaussian_noise=self.gaussian_noise,
                 ) if len(train_pairs) > 0 else None
 
                 self.test = _KITTIDepthDataset(
@@ -221,9 +254,14 @@ class KITTIDepthDataset:
                     is_train=False,
                     max_depth_meters=self.max_depth_meters,
                     dense_assumed_max_meters=self.dense_assumed_max_meters,
-                    augment=False,
+                    augment=self.augment_test_data,
+                    flip=self.flip,
+                    colorjitter=self.colorjitter,
+                    gaussianblur=self.gaussianblur,
+                    grayscale=self.grayscale,
+                    gaussian_noise=self.gaussian_noise,
                 ) if len(test_pairs) > 0 else None
-        else:
+        elif scan_from_root:
             # Fallback: try scanning a conventional KITTI directory layout
             train_pairs = scan_kitti_pairs(self.data_root, "train", self.camera_id)
             val_pairs = scan_kitti_pairs(self.data_root, "val", self.camera_id)
@@ -238,12 +276,12 @@ class KITTIDepthDataset:
                 is_train=True,
                 max_depth_meters=self.max_depth_meters,
                 dense_assumed_max_meters=self.dense_assumed_max_meters,
-                augment=augment,
-                flip=flip,
-                colorjitter=colorjitter,
-                gaussianblur=gaussianblur,
-                grayscale=grayscale,
-                gaussian_noise=gaussian_noise,
+                augment=self.augment,
+                flip=self.flip,
+                colorjitter=self.colorjitter,
+                gaussianblur=self.gaussianblur,
+                grayscale=self.grayscale,
+                gaussian_noise=self.gaussian_noise,
             ) if train_pairs else None
 
             self.test = _KITTIDepthDataset(
@@ -252,7 +290,12 @@ class KITTIDepthDataset:
                 is_train=False,
                 max_depth_meters=self.max_depth_meters,
                 dense_assumed_max_meters=self.dense_assumed_max_meters,
-                augment=False,
+                augment=self.augment_test_data,
+                flip=self.flip,
+                colorjitter=self.colorjitter,
+                gaussianblur=self.gaussianblur,
+                grayscale=self.grayscale,
+                gaussian_noise=self.gaussian_noise,
             ) if val_pairs else None
 
     def get_dataloaders(self, batch_size: int, shuffle: bool = True) -> Tuple[Optional[DataLoader], Optional[DataLoader]]:
@@ -261,7 +304,8 @@ class KITTIDepthDataset:
         if self.train is not None:
             train_loader = DataLoader(self.train, batch_size=batch_size, shuffle=shuffle, num_workers=8, prefetch_factor=4)
         if self.test is not None:
-            test_loader = DataLoader(self.test, batch_size=batch_size, shuffle=False, num_workers=8, prefetch_factor=4)
+            # Match simple depth behavior: allow shuffle control on test loader too
+            test_loader = DataLoader(self.test, batch_size=batch_size, shuffle=shuffle, num_workers=8, prefetch_factor=4)
         return train_loader, test_loader
 
 
@@ -269,7 +313,7 @@ class _KITTIDepthDataset(Dataset):
     def __init__(
         self,
         pairs: List[Tuple[str, str]],
-        img_size: Tuple[int, int] = (128, 160),
+        img_size: Tuple[int, int] = (128, 256),
         is_train: bool = False,
         max_depth_meters: float = 80.0,
         dense_assumed_max_meters: float = 80.0,
@@ -316,6 +360,8 @@ class _KITTIDepthDataset(Dataset):
     def _load_rgb(self, path: str) -> torch.Tensor:
         img = decode_image(read_file(path), mode=ImageReadMode.RGB).to(torch.float32) / 255.0
         img = self.rgb_transform(img)
+        # Clamp after interpolation/augs to avoid minor overshoots (e.g., bicubic) causing values > 1
+        img = torch.clamp(img, 0.0, 1.0)
         if self.is_train and self.augment and self.gaussian_noise:
             if np.random.random() < 0.5:
                 img = torch.clamp(img + torch.randn_like(img) * 0.03, 0.0, 1.0)
@@ -385,28 +431,35 @@ if __name__ == "__main__":
         axes = np.array([axes])
 
     for r, idx in enumerate(idxs):
-        rgb_path, depth_path = dataset_obj.pairs[idx]
+        # rgb_path, depth_path = dataset_obj.pairs[idx]
+        # import ipdb; ipdb.set_trace()
 
-        with Image.open(rgb_path) as im_rgb:
-            rgb_np = np.array(im_rgb.convert("RGB"))
+        # with Image.open(rgb_path) as im_rgb:
+        #     rgb_np = np.array(im_rgb.convert("RGB"))
 
-        with Image.open(depth_path) as im_d:
-            depth_arr = np.array(im_d)
-        if depth_arr.dtype == np.uint16 or depth_arr.max() > 255:
-            depth_m = depth_arr.astype(np.float32) / 256.0
-            depth_vis = np.clip(depth_m / ds.max_depth_meters, 0.0, 1.0)
-        else:
-            depth_lin01 = depth_arr.astype(np.float32) / 255.0
-            depth_m = depth_lin01 * ds.dense_assumed_max_meters
-            depth_vis = np.clip(depth_m / ds.max_depth_meters, 0.0, 1.0)
+        # with Image.open(depth_path) as im_d:
+        #     depth_arr = np.array(im_d)
+        # if depth_arr.dtype == np.uint16 or depth_arr.max() > 255:
+        #     depth_m = depth_arr.astype(np.float32) / 256.0
+        #     depth_vis = np.clip(depth_m / ds.max_depth_meters, 0.0, 1.0)
+        # else:
+        #     depth_lin01 = depth_arr.astype(np.float32) / 255.0
+        #     depth_m = depth_lin01 * ds.dense_assumed_max_meters
+        #     depth_vis = np.clip(depth_m / ds.max_depth_meters, 0.0, 1.0)
 
-        axes[r, 0].imshow(rgb_np)
+        rgb, depth = dataset_obj.__getitem__(idx)
+        axes[r, 0].imshow(rgb.permute(1, 2, 0).numpy())
         axes[r, 0].set_title("RGB")
         axes[r, 0].axis("off")
-
-        axes[r, 1].imshow(depth_vis, cmap="plasma")
+        axes[r, 1].imshow(depth.squeeze().numpy(), cmap="plasma")
         axes[r, 1].set_title("Depth (normalized)")
         axes[r, 1].axis("off")
+        # import ipdb; ipdb.set_trace()
+
+    # for x, y in tqdm(dataset_obj):
+    #     if x.min() < 0.0 or x.max() > 1.0 or y.min() < 0.0 or y.max() > 1.0:
+    #         import ipdb; ipdb.set_trace()
+    #         pass        
 
     plt.tight_layout()
     os.makedirs("results", exist_ok=True)
