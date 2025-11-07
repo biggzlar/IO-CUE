@@ -13,6 +13,8 @@ from predictors.gaussian import post_hoc_predict_gaussian
 from predictors.mse import predict_mse
 from evaluation.utils import load_mean_model, load_variance_model
 
+from models.post_hoc_frameworks import IOCUE
+
 plt.rcParams.update(
     {
         "font.size": 12,
@@ -58,16 +60,17 @@ if __name__ == "__main__":
                 n_models=5, device=device) for model_name, path in base_model_paths.items()
         }
 
-        post_hoc_gaussian_model = load_variance_model(
-            PostHocEnsemble, 
-            model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
-            # model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
-            # model_path="results/baby_edgy_depth/checkpoints/variance_ensemble.pt", 
-            inference_fn=post_hoc_predict_gaussian, 
-            model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3}, 
-            n_models=1, 
-            device=device,
-            model_class=UNet)
+        # post_hoc_gaussian_model = load_variance_model(
+        #     mean_ensemble=base_models, 
+        #     model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
+        #     model_type=IOCUE,
+        #     # model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
+        #     # model_path="results/baby_edgy_depth/checkpoints/variance_ensemble.pt", 
+        #     # inference_fn=post_hoc_predict_gaussian, 
+        #     model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3}, 
+        #     n_models=1, 
+        #     device=device,
+        #     model_class=UNet)
 
         flat_results = {"flip": {"nll": [], "rmse": [], "avg_var": [], "ece": [], "euc": [], "p_value": []},
                         "colorjitter": {"nll": [], "rmse": [], "avg_var": [], "ece": [], "euc": [], "p_value": []},
@@ -75,11 +78,22 @@ if __name__ == "__main__":
                         "grayscale": {"nll": [], "rmse": [], "avg_var": [], "ece": [], "euc": [], "p_value": []}}
         roc_results = {"flip": [], "colorjitter": [], "gaussianblur": [], "grayscale": []}
         for model_name, model in base_models.items():
+            post_hoc_gaussian_model = load_variance_model(
+                mean_ensemble=model, 
+                model_path="results/pretrained/post_hoc_gaussian_aug.pth", 
+                model_type=IOCUE,
+                # model_path="results/edgy_depth/checkpoints/post_hoc_ensemble_model_best.pt", 
+                # model_path="results/baby_edgy_depth/checkpoints/variance_ensemble.pt", 
+                # inference_fn=post_hoc_predict_gaussian, 
+                model_params={"in_channels": 4, "out_channels": [1], "drop_prob": 0.3}, 
+                n_models=1, 
+                device=device,
+                model_class=UNet)
+
             for ood_dataset in ood_datasets:
                 id_loader = id_dataset.get_dataloaders(batch_size=128, shuffle=False)[1]
                 id_results = post_hoc_gaussian_model.evaluate(
                     test_loader=id_loader,
-                    mean_ensemble=model
                 )
                 # # Create counterfactual scenario
                 # counter_factual_data = (id_dataset.test.data[0], ood_dataset.test.data[1])
@@ -88,7 +102,7 @@ if __name__ == "__main__":
                 ood_loader = ood_dataset.get_dataloaders(batch_size=128, shuffle=False)[1]
                 ood_results = post_hoc_gaussian_model.evaluate(
                     test_loader=ood_loader,
-                    mean_ensemble=model
+                    # mean_ensemble=model
                 )
 
                 id_uncertainties = id_results['all_sigmas'].mean(dim=(1, 2, 3))
@@ -107,8 +121,9 @@ if __name__ == "__main__":
                 roc_results[model_name].append(roc_auc)
 
             # flat_results.append([val for val in results['metrics'].values()])
-                output_str = f" ".join([f"{k}: {v:.2f}" for k, v in ood_results['metrics'].items()])
-                print(output_str)
+                # import ipdb; ipdb.set_trace()
+                # output_str = f" ".join([f"{k}: {v:.2f}" for k, v in ood_results['metrics'].items()])
+                # print(output_str)
 
         pickle.dump(flat_results, open(os.path.join(results_dir, "flat_results.pkl"), "wb"))
         pickle.dump(roc_results, open(os.path.join(results_dir, "roc_results.pkl"), "wb"))
