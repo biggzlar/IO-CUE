@@ -27,12 +27,14 @@ plt.rcParams.update(
         "text.usetex": False,
         "font.family": "stixgeneral",
         "mathtext.fontset": "stix",
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
     }
 )
 
 # Set random seeds for reproducibility
-torch.manual_seed(42)
-np.random.seed(42)
+# torch.manual_seed(42)
+# np.random.seed(42)
 
 # Device configuration
 device = "cpu"
@@ -77,10 +79,10 @@ def main(args):
     ).to(device)
 
     bayescap_loss_wrapper = LossWrapper("bayescap", post_hoc=True)
-    gaussian_posthoc_loss_wrapper = LossWrapper("gaussian", post_hoc=True)
+    # gaussian_posthoc_loss_wrapper = LossWrapper("gaussian", post_hoc=True)
 
     bayescap_output_dims = bayescap_loss_wrapper.output_dims
-    gaussian_posthoc_output_dims = gaussian_posthoc_loss_wrapper.output_dims
+    # gaussian_posthoc_output_dims = gaussian_posthoc_loss_wrapper.output_dims
 
     bayescap_model = SimpleRegressionModel(
         in_channels=base_output_dims,
@@ -89,15 +91,15 @@ def main(args):
         activation=nn.ReLU,
     ).to(device)
 
-    gaussian_posthoc_model = SimpleRegressionModel(
-        in_channels=1,
-        hidden_dim=args.posthoc_hidden_dim,
-        output_dim=gaussian_posthoc_output_dims,
-        activation=nn.Mish,
-    ).to(device)
+    # gaussian_posthoc_model = SimpleRegressionModel(
+    #     in_channels=1,
+    #     hidden_dim=args.posthoc_hidden_dim,
+    #     output_dim=gaussian_posthoc_output_dims,
+    #     activation=nn.Mish,
+    # ).to(device)
 
     bayescap_predictor = PredictorWrapper("bayescap")
-    gaussian_posthoc_predictor = PredictorWrapper("gaussian")
+    # gaussian_posthoc_predictor = PredictorWrapper("gaussian")
 
     print("Training single-model base (MSE)...")
     base_model = train_single_base_model(
@@ -120,17 +122,17 @@ def main(args):
         is_bayescap=True,
     )
 
-    print("Training Gaussian post-hoc model (single-model pipeline)...")
-    gaussian_posthoc_model = train_single_posthoc_model(
-        model=gaussian_posthoc_model,
-        base_model=base_model,
-        loss_wrapper=gaussian_posthoc_loss_wrapper,
-        X=X_train,
-        y=y_train,
-        n_epochs=args.n_epochs,
-        lr=args.posthoc_lr,
-        is_bayescap=False,
-    )
+    # print("Training Gaussian post-hoc model (single-model pipeline)...")
+    # gaussian_posthoc_model = train_single_posthoc_model(
+    #     model=gaussian_posthoc_model,
+    #     base_model=base_model,
+    #     loss_wrapper=gaussian_posthoc_loss_wrapper,
+    #     X=X_train,
+    #     y=y_train,
+    #     n_epochs=args.n_epochs,
+    #     lr=args.posthoc_lr,
+    #     is_bayescap=False,
+    # )
 
     # -----------------------
     # Ensemble pipelines: Gaussian-NLL and MSE + ICUE
@@ -217,6 +219,24 @@ def main(args):
         device=device,
     )
 
+    # # Experiment: Add guaranteed, random OOD data.
+    # random_data = torch.randn(100, 1).to(device) * 8. + 4.
+    # mask = torch.logical_or((random_data > 4.), (random_data < 1.))
+    # random_data = random_data[mask.squeeze(-1)]
+    # random_targets = torch.randn(len(random_data), 1).to(device)
+    # random_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(random_data, random_targets), batch_size=32, shuffle=True)
+    
+    # # Extract all data from both datasets and merge into a single dataloader
+    # train_X = torch.cat([train_loader.dataset.X, random_loader.dataset.tensors[0]], dim=0)
+    # train_y = torch.cat([train_loader.dataset.y, random_loader.dataset.tensors[1]], dim=0)
+    # combined_dataset = torch.utils.data.TensorDataset(train_X, train_y)
+    # train_loader = torch.utils.data.DataLoader(
+    #     combined_dataset, 
+    #     batch_size=train_loader.batch_size, 
+    #     shuffle=True
+    # )
+
+
     icue_ensemble.optimize(
         results_dir=results_dir,
         model_dir=model_dir,
@@ -244,10 +264,10 @@ def main(args):
         bayescap_info = bayescap_predictor.predict_from_outputs(bayescap_outputs)
         bayescap_sigma = bayescap_info["sigma"].cpu().numpy()
 
-        # Gaussian post-hoc sigma (single-model)
-        gaussian_posthoc_outputs = gaussian_posthoc_model(x_plot_tensor)
-        gaussian_posthoc_info = gaussian_posthoc_predictor.predict_from_outputs(gaussian_posthoc_outputs)
-        gaussian_posthoc_sigma = gaussian_posthoc_info["sigma"].cpu().numpy()
+        # # Gaussian post-hoc sigma (single-model)
+        # gaussian_posthoc_outputs = gaussian_posthoc_model(x_plot_tensor)
+        # gaussian_posthoc_info = gaussian_posthoc_predictor.predict_from_outputs(gaussian_posthoc_outputs)
+        # gaussian_posthoc_sigma = gaussian_posthoc_info["sigma"].cpu().numpy()
 
         # Gaussian ensemble predictions
         gaussian_preds = gaussian_base_ensemble.predict(x_plot_tensor)
@@ -304,7 +324,7 @@ def main(args):
         color='#20B2AA', alpha=0.3, label=r'Bayescap Uncertainty $\left( \pm 2\sigma \right)$', linewidth=0,
     )
     axs[1].set_xlabel(r'$x$', fontsize=18)
-    axs[1].set_ylabel(r'$y$', fontsize=18)
+    # axs[1].set_ylabel(r'$y$', fontsize=18)
     axs[1].set_title(r'$\mathbf{(b)}$ BayesCap: Estimated on base model outputs')
     axs[1].legend(ncol=2, loc='upper center')
     axs[1].set_ylim(-4, 4)
@@ -323,14 +343,14 @@ def main(args):
         color='#8a2be2', alpha=0.3, label=r'Post-hoc Uncertainty $\left( \pm 2\sigma \right)$', linewidth=0,
     )
     axs[2].set_xlabel(r'$x$', fontsize=18)
-    axs[2].set_ylabel(r'$y$', fontsize=18)
+    # axs[2].set_ylabel(r'$y$', fontsize=18)
     axs[2].set_title(r'$\mathbf{(c)}$ Model trained on MSE with Post-hoc Uncertainty')
     axs[2].legend(ncol=2, loc='upper center')
     axs[2].set_ylim(-4, 4)
     axs[2].set_xlim(ood_lower, ood_upper)
 
     # (d) Uncertainty curves
-    axs[3].plot(x_plot, true_noise, 'k-', label=r'Ground Truth Noise ($\sigma$)')
+    axs[3].plot(x_plot, true_noise, 'k--', label=r'Ground Truth Noise ($\sigma$)')
     axs[3].axvspan(ood_lower, ood_lower + 1, alpha=0.3, color='gray', label='OOD Region', linewidth=0)
     axs[3].axvspan(ood_upper - 1, ood_upper, alpha=0.3, color='gray', linewidth=0)
     axs[3].plot(x_plot, gaussian_sigma, linewidth=2, color='#FF6B6B', label=r'Gaussian Predicted Noise ($\sigma$)')
@@ -344,7 +364,7 @@ def main(args):
     axs[3].legend(ncol=2, loc='upper center')
 
     plt.tight_layout()
-    out_path = os.path.join(results_dir, f'{args.output_name}.png')
+    out_path = os.path.join(results_dir, f'{args.output_name}.pdf')
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
 
