@@ -1,7 +1,10 @@
 import h5py
 import numpy as np
+import torch
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+import math
 
 def load_apolloscape_depth():
     """Load the Apolloscape dataset"""
@@ -10,10 +13,14 @@ def load_apolloscape_depth():
     return (dataset["image"], dataset["depth"])
 
 class ApolloscapeDepthDataset:
-    def __init__(self):
-        """Initialize the Apolloscape depth dataset"""
+    def __init__(self, img_size=None):
+        """Initialize the Apolloscape depth dataset
+        
+        Args:
+            img_size: Optional (H, W) to resize samples to. If None, keep original size.
+        """
         data = load_apolloscape_depth()
-        self.test = _ApolloscapeDepthDataset(data)
+        self.test = _ApolloscapeDepthDataset(data, img_size=img_size)
 
     def get_dataloaders(self, batch_size, shuffle=False):
         """Return dataloader for the test set"""
@@ -22,9 +29,10 @@ class ApolloscapeDepthDataset:
 
 
 class _ApolloscapeDepthDataset(Dataset):
-    def __init__(self, data):
+    def __init__(self, data, img_size=None):
         """Initialize the internal dataset class"""
         self.data = data
+        self.img_size = img_size
         self.transform = transforms.Compose([
             transforms.ToTensor(),
         ])
@@ -41,7 +49,24 @@ class _ApolloscapeDepthDataset(Dataset):
         else:
             image = self.data[0][idx]
             depth = self.data[1][idx]
-        return self.transform(image), self.transform(depth)
+        # Sanitize inputs to remove NaNs/Infs and clamp to valid ranges
+        image = np.nan_to_num(image, nan=0.0, posinf=1.0, neginf=0.0)
+        depth = np.nan_to_num(depth, nan=0.0, posinf=1.0, neginf=0.0)
+        # Clamp images to [0,1], depth to [0,1] since it's normalized above
+        image = np.clip(image, 0.0, 1.0)
+        depth = np.clip(depth, 0.0, 1.0)
+        img_t = self.transform(image)
+        depth_t = self.transform(depth)
+        # Resize if requested to ensure compatibility with model input sizes
+        if self.img_size is not None:
+            # img_t: [C,H,W], depth_t: [1,H,W]
+            img_t = F.interpolate(img_t.unsqueeze(0), size=self.img_size, mode='bilinear', align_corners=False).squeeze(0)
+            # Use nearest for depth to preserve label values
+            depth_t = F.interpolate(depth_t.unsqueeze(0), size=self.img_size, mode='nearest').squeeze(0)
+        # Final tensor-level sanitation to be safe
+        img_t = torch.nan_to_num(img_t, nan=0.0, posinf=1.0, neginf=0.0).clamp(0.0, 1.0)
+        depth_t = torch.nan_to_num(depth_t, nan=0.0, posinf=1.0, neginf=0.0).clamp(0.0, 1.0)
+        return img_t, depth_t
 
 
 if __name__ == "__main__":
