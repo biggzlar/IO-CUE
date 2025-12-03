@@ -39,6 +39,6 @@ def bayescap_loss(y_true, y_pred, params, reduce=True, **kwargs):
     identity_loss = torch.square(y_pred - mu_tilde)
 
     rate = kwargs["epoch"] / kwargs["n_epochs"]
-    loss = max(1 - rate, 1e-1) * identity_loss + max(rate, 5e-2) * nll
+    loss = max(1 - rate, 0.) * identity_loss + max(rate, 5e-2) * nll
 
     return loss.mean() if reduce else loss
