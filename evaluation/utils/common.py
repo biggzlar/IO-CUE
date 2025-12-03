@@ -47,6 +47,8 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
     examples_path = os.path.join(path, "examples_plots")
     os.makedirs(examples_path, exist_ok=True)
 
+    # Limit num_samples to available images
+    num_samples = min(num_samples, len(images))
     fig, axs = plt.subplots(num_samples, 5, figsize=(20, num_samples * 4))
     for i in range(num_samples):
         img = images[i].cpu().permute(1, 2, 0).numpy()
@@ -77,16 +79,19 @@ def visualize_results(results, num_samples, metric_name, path=None, suffix=""):
 
         ax_error = axs[i, 3]
         im3 = ax_error.imshow(torch.abs(mu - y).squeeze().cpu().numpy(), cmap="plasma")
+        im3.set_clim(0, .3)
         ax_error.set_title(f"Error")
         ax_error.axis("off")
-
+        
         ax_var = axs[i, 4]
         im4 = ax_var.imshow(sigma.squeeze().cpu().numpy(), cmap="plasma")
+        im4.set_clim(0, .3)
         ax_var.set_title(f"Standard Deviation")
         ax_var.axis("off")
 
     plt.tight_layout()
     out_path = os.path.join(examples_path, f"eval_{metric_name}{suffix}.png")
+    print(f"Saving examples to {out_path}")
     plt.savefig(out_path, dpi=300)
     plt.close()
 
