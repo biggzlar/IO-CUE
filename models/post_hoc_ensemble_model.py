@@ -5,12 +5,13 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from dataloaders.dataset_utils import create_bootstrapped_dataloaders
-from evaluation.utils import compute_ece, compute_euc, compute_crps
+from evaluation.utils import compute_ece, compute_euc, compute_crps, compute_ause_rmse
 from models.model_utils import create_optimizer, create_scheduler, create_model_instances
 from evaluation.utils import get_predictions, visualize_results
 
 from predictors.gaussian import gaussian_nll
-from predictors.bayescap import predict_bayescap
+from predictors.bayescap import bayescap_loss, predict_bayescap
+from predictors.generalized_gaussian import gen_gaussian_nll
 
 class PostHocEnsemble(nn.Module):
     def __init__(self, mean_ensemble, model_class, model_params, n_models=5, device=None):
@@ -36,7 +37,7 @@ class PostHocEnsemble(nn.Module):
             model.to(self.device)
 
         # self.infer = infer
-        # self.is_bayescap = self.infer == predict_bayescap
+        # self.is_bayescap = self.loss == bayescap_loss
         self.is_bayescap = False
 
         self.train_log = {'nll': [], 'rmse': [], 'avg_var': [], 'ece': [], 'euc': [], 'crps': [], 'p_value': []}
@@ -151,7 +152,7 @@ class PostHocEnsemble(nn.Module):
                         n_epochs=self._total_epochs if self._total_epochs is not None else n_epochs,
                         reduce=True
                     )
-                    
+
                     # Backward pass
                     loss.backward()
                     optimizers[i].step()
@@ -181,17 +182,16 @@ class PostHocEnsemble(nn.Module):
                 results = self.evaluate(test_loader)
                 
                 total_epochs_display = self._total_epochs if self._total_epochs is not None else n_epochs
-                print(f"\nEpoch {global_epoch_index+1}/{total_epochs_display} - RMSE: {results['metrics']['rmse']:.4f}, NLL: {results['metrics']['nll']:.4f}, ECE: {results['metrics']['ece']:.4f}, EUC: {results['metrics']['euc']:.4f}, CRPS: {results['metrics']['crps']:.4f}")
+                print(f"\nEpoch {global_epoch_index+1}/{total_epochs_display} - RMSE: {results['metrics']['rmse']:.3f}, NLL: {results['metrics']['nll']:.3f}, ECE: {results['metrics']['ece']:.3f}, EUC: {results['metrics']['euc']:.3f}, CRPS: {results['metrics']['crps']:.3f}, AUSE RMSE: {results['metrics']['ause_rmse']:.3f}")
                 self.update_log(results)
                 self.pickle_log(f"{results_dir}/post_hoc_ensemble_model_log.pkl")
                 if results['metrics']['nll'] < self.min_nll:
                     self.min_nll = results['metrics']['nll']
-                    self.save(f"{model_dir}/post_hoc_ensemble_model_{global_epoch_index + 1}.pth")
-                    self.save(f"{model_dir}/post_hoc_ensemble_model_best.pt")
+                    self.save(f"{model_dir}/post_hoc_ensemble_model_best.pth")
                     self.overfit_counter = 0
                 else:
                     self.overfit_counter += 1
-
+                self.save(f"{model_dir}/post_hoc_ensemble_model_{global_epoch_index + 1}.pth")
                 # We can only do this specific visualization if the dataset is simple_depth
                 if len(batch_X.shape) == 4:
                     visualize_results(results, num_samples=5, metric_name="nll", path=f"{results_dir}", suffix=f"_{global_epoch_index}")
@@ -204,12 +204,13 @@ class PostHocEnsemble(nn.Module):
             
             # Advance global epoch counter at end of this epoch
             self._epoch += 1
+        self.save(f"{model_dir}/post_hoc_ensemble_model_last.pth")
                     
         pbar.close()
-        if not one_epoch and load_best_at_end:
-            best_path = f"{model_dir}/post_hoc_ensemble_model_best.pt"
-            if os.path.exists(best_path):
-                self.load(best_path)
+        # if not one_epoch and load_best_at_end:
+        #     best_path = f"{model_dir}/post_hoc_ensemble_model_best.pt"
+        #     if os.path.exists(best_path):
+        #         self.load(best_path)
         
     def reset_training_state(self):
         """
@@ -269,7 +270,13 @@ class PostHocEnsemble(nn.Module):
 
                 # Compute NLL using framework's loss function if available
                 batch_params = batch_post_hoc_preds['params']
-                batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False, epoch=1, n_epochs=1)
+                # BayesCap's loss is not a proper scoring function, so we use the generalized Gaussian NLL.
+                if self.is_bayescap:
+                    batch_nll = gen_gaussian_nll(y_pred=batch_means, y_true=batch_y, params=batch_post_hoc_preds['params'], reduce=False, epoch=1, n_epochs=1)
+                else:
+                    batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False, epoch=1, n_epochs=1)
+                    
+                # batch_nll = self.loss(y_true=batch_y, y_pred=batch_means, params=batch_params, reduce=False, epoch=1, n_epochs=1)
                 all_nlls.append(batch_nll)
 
                 batch_errors = torch.abs(batch_y - batch_means).square().mean(dim=batch_average_indices)
@@ -290,6 +297,7 @@ class PostHocEnsemble(nn.Module):
         ece, empirical_confidence_levels = compute_ece(residuals=residuals, sigma=all_post_hoc_sigmas)
         euc, p_value = compute_euc(predictions=all_base_means, uncertainties=all_post_hoc_sigmas, targets=all_targets)
         crps = compute_crps(predictions=all_base_means, uncertainties=all_post_hoc_sigmas, targets=all_targets)
+        ause_rmse, sparsification_error = compute_ause_rmse(predictions=all_base_means, uncertainties=all_post_hoc_sigmas, targets=all_targets)
 
         # print(f"{self.is_bayescap}, NLL: {nll.mean().detach().item():.4f}, ECE: {ece:.4f}, EUC: {euc:.4f}")
         metrics = {
@@ -300,7 +308,9 @@ class PostHocEnsemble(nn.Module):
             'ece': ece,
             'euc': euc,
             'p_value': p_value,
-            'crps': crps.mean().detach().cpu()
+            'crps': crps.mean().detach().cpu(),
+            'ause_rmse': ause_rmse,
+            'sparsification_error': sparsification_error
         }
         
         return {
